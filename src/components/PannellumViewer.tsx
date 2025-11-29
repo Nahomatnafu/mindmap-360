@@ -60,58 +60,6 @@ export function PannellumViewer({
   const onAddFlashcardRef = useRef(onAddFlashcard);
   useEffect(() => { onAddFlashcardRef.current = onAddFlashcard; }, [onAddFlashcard]);
 
-  // Build scenes configuration for multi-room tour
-  const buildScenesConfig = useCallback(() => {
-    const scenes: any = {};
-
-    TOUR_SCENES.scenes.forEach(scene => {
-      // Get flashcards for this scene (stored with sceneId prefix)
-      const sceneFlashcards = tour.flashcards.filter(fc =>
-        fc.id.startsWith(scene.id + '_') || !fc.id.includes('_')
-      );
-
-      // Build hotspots for this scene
-      const hotSpots: any[] = [];
-
-      // Add flashcard hotspots
-      sceneFlashcards.forEach(fc => {
-        hotSpots.push({
-          id: fc.id,
-          pitch: fc.position.pitch,
-          yaw: fc.position.heading,
-          type: 'info',
-          cssClass: fc.id === selectedFlashcardId ? 'flashcard-hotspot selected' : 'flashcard-hotspot',
-          createTooltipFunc: (div: HTMLElement) => createFlashcardTooltip(div, fc, fc.id === selectedFlashcardId),
-          clickHandlerFunc: () => onSelectFlashcard(fc.id),
-        });
-      });
-
-      // Add navigation hotspots to other rooms
-      TOUR_SCENES.navHotspots
-        .filter(nav => nav.fromScene === scene.id)
-        .forEach(nav => {
-          const targetScene = TOUR_SCENES.scenes.find(s => s.id === nav.toScene);
-          hotSpots.push({
-            id: nav.id,
-            pitch: nav.position.pitch,
-            yaw: nav.position.heading,
-            type: 'scene',
-            sceneId: nav.toScene,
-            text: nav.label || targetScene?.name || 'Go',
-            cssClass: 'nav-hotspot',
-          });
-        });
-
-      scenes[scene.id] = {
-        type: 'equirectangular',
-        panorama: scene.image,
-        hotSpots: hotSpots,
-      };
-    });
-
-    return scenes;
-  }, [tour.flashcards, selectedFlashcardId, onSelectFlashcard]);
-
   // Initialize viewer when ready
   useEffect(() => {
     if (!isReady || !containerRef.current || !window.pannellum) return;
@@ -121,12 +69,41 @@ export function PannellumViewer({
       viewerRef.current.destroy();
     }
 
-    const scenes = buildScenesConfig();
+    // Build scenes with navigation hotspots
+    const scenes: any = {};
+
+    TOUR_SCENES.scenes.forEach(scene => {
+      const hotSpots: any[] = [];
+
+      // Add navigation hotspots to other rooms - make them very visible
+      TOUR_SCENES.navHotspots
+        .filter(nav => nav.fromScene === scene.id)
+        .forEach(nav => {
+          hotSpots.push({
+            id: nav.id,
+            pitch: nav.position.pitch,
+            yaw: nav.position.heading,
+            type: 'scene',
+            sceneId: nav.toScene,
+            text: nav.label || 'Go',
+          });
+        });
+
+      scenes[scene.id] = {
+        type: 'equirectangular',
+        panorama: scene.image,
+        hotSpots: hotSpots,
+        autoLoad: true,
+      };
+    });
+
+    console.log('🏠 Initializing tour with scenes:', Object.keys(scenes));
+    console.log('🔗 Navigation hotspots:', TOUR_SCENES.navHotspots);
 
     // Initialize Pannellum with multi-scene tour
     viewerRef.current = window.pannellum.viewer(containerRef.current, {
       default: {
-        firstScene: currentScene,
+        firstScene: 'room1',
         autoLoad: true,
         showControls: true,
         mouseZoom: true,
@@ -137,7 +114,8 @@ export function PannellumViewer({
         minHfov: 50,
         maxHfov: 120,
         compass: false,
-        sceneFadeDuration: 500,
+        sceneFadeDuration: 1000,
+        hotSpotDebug: true, // Show hotspot positions for debugging
       },
       scenes: scenes,
     });
@@ -199,7 +177,7 @@ export function PannellumViewer({
         viewerRef.current = null;
       }
     };
-  }, [isReady, tour.id, buildScenesConfig, currentScene]);
+  }, [isReady, tour.id]);
 
   // Create tooltip for flashcard
   const createFlashcardTooltip = useCallback((div: HTMLElement, fc: Flashcard, isSelected: boolean) => {

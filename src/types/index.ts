@@ -115,15 +115,15 @@ export const TOUR_SCENES: TourConfig = {
     { id: 'room3', name: 'Kitchen', image: '/tours/room3.jpg' },
   ],
   navHotspots: [
-    // From Room 1 to other rooms
-    { id: 'nav1-2', fromScene: 'room1', toScene: 'room2', position: { heading: 90, pitch: -10 }, label: 'Bedroom' },
-    { id: 'nav1-3', fromScene: 'room1', toScene: 'room3', position: { heading: -90, pitch: -10 }, label: 'Kitchen' },
+    // From Room 1 to other rooms - placed on the floor (pitch: -30)
+    { id: 'nav1-2', fromScene: 'room1', toScene: 'room2', position: { heading: 90, pitch: -30 }, label: 'Go to Bedroom →' },
+    { id: 'nav1-3', fromScene: 'room1', toScene: 'room3', position: { heading: -90, pitch: -30 }, label: '← Go to Kitchen' },
     // From Room 2 to other rooms
-    { id: 'nav2-1', fromScene: 'room2', toScene: 'room1', position: { heading: 180, pitch: -10 }, label: 'Living Room' },
-    { id: 'nav2-3', fromScene: 'room2', toScene: 'room3', position: { heading: 0, pitch: -10 }, label: 'Kitchen' },
+    { id: 'nav2-1', fromScene: 'room2', toScene: 'room1', position: { heading: 180, pitch: -30 }, label: 'Go to Living Room' },
+    { id: 'nav2-3', fromScene: 'room2', toScene: 'room3', position: { heading: 0, pitch: -30 }, label: 'Go to Kitchen' },
     // From Room 3 to other rooms
-    { id: 'nav3-1', fromScene: 'room3', toScene: 'room1', position: { heading: 0, pitch: -10 }, label: 'Living Room' },
-    { id: 'nav3-2', fromScene: 'room3', toScene: 'room2', position: { heading: 180, pitch: -10 }, label: 'Bedroom' },
+    { id: 'nav3-1', fromScene: 'room3', toScene: 'room1', position: { heading: 0, pitch: -30 }, label: 'Go to Living Room' },
+    { id: 'nav3-2', fromScene: 'room3', toScene: 'room2', position: { heading: 180, pitch: -30 }, label: 'Go to Bedroom' },
   ],
   defaultScene: 'room1',
 };
