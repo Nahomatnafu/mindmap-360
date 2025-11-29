@@ -75,31 +75,56 @@ export function createEmbedUrl(type: Tour['type'], tourId: string): string {
   return `https://kuula.co/share/collection/${tourId}?logo=1&info=1&fs=1&vr=0&sd=1&thumbs=1`;
 }
 
-// Default sample tours - using local 360 images with Pannellum
+// Navigation hotspot for walking between scenes
+export interface NavHotspot {
+  id: string;
+  fromScene: string;  // Scene ID where hotspot is placed
+  toScene: string;    // Scene ID to navigate to
+  position: Position; // Where the hotspot appears
+  label?: string;     // Optional label like "Go to Kitchen"
+}
+
+// Multi-scene tour configuration
+export interface TourConfig {
+  scenes: {
+    id: string;
+    name: string;
+    image: string;
+  }[];
+  navHotspots: NavHotspot[];
+  defaultScene: string;
+}
+
+// Default sample tour - multi-room with navigation
 export const SAMPLE_TOURS: Omit<Tour, 'id' | 'createdAt' | 'updatedAt'>[] = [
   {
-    name: 'Room 1',
-    description: '360° panorama with Pannellum viewer',
+    name: 'My Apartment Tour',
+    description: '360° multi-room tour with navigation',
     type: 'panorama',
-    tourId: 'room1',
-    embedUrl: '/tours/room1.jpg',
-    flashcards: [],
-  },
-  {
-    name: 'Room 2',
-    description: '360° panorama with Pannellum viewer',
-    type: 'panorama',
-    tourId: 'room2',
-    embedUrl: '/tours/room2.jpg',
-    flashcards: [],
-  },
-  {
-    name: 'Room 3',
-    description: '360° panorama with Pannellum viewer',
-    type: 'panorama',
-    tourId: 'room3',
-    embedUrl: '/tours/room3.jpg',
+    tourId: 'apartment',
+    embedUrl: '/tours/room1.jpg', // Default scene
     flashcards: [],
   },
 ];
+
+// Tour scenes configuration
+export const TOUR_SCENES: TourConfig = {
+  scenes: [
+    { id: 'room1', name: 'Living Room', image: '/tours/room1.jpg' },
+    { id: 'room2', name: 'Bedroom', image: '/tours/room2.jpg' },
+    { id: 'room3', name: 'Kitchen', image: '/tours/room3.jpg' },
+  ],
+  navHotspots: [
+    // From Room 1 to other rooms
+    { id: 'nav1-2', fromScene: 'room1', toScene: 'room2', position: { heading: 90, pitch: -10 }, label: 'Bedroom' },
+    { id: 'nav1-3', fromScene: 'room1', toScene: 'room3', position: { heading: -90, pitch: -10 }, label: 'Kitchen' },
+    // From Room 2 to other rooms
+    { id: 'nav2-1', fromScene: 'room2', toScene: 'room1', position: { heading: 180, pitch: -10 }, label: 'Living Room' },
+    { id: 'nav2-3', fromScene: 'room2', toScene: 'room3', position: { heading: 0, pitch: -10 }, label: 'Kitchen' },
+    // From Room 3 to other rooms
+    { id: 'nav3-1', fromScene: 'room3', toScene: 'room1', position: { heading: 0, pitch: -10 }, label: 'Living Room' },
+    { id: 'nav3-2', fromScene: 'room3', toScene: 'room2', position: { heading: 180, pitch: -10 }, label: 'Bedroom' },
+  ],
+  defaultScene: 'room1',
+};
 

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { Tour, AppMode, Position, Flashcard } from '@/types';
+import { Tour, AppMode, Position, Flashcard, TOUR_SCENES } from '@/types';
 
 declare global {
   interface Window {
@@ -30,6 +30,7 @@ export function PannellumViewer({
   const viewerRef = useRef<any>(null);
   const [isReady, setIsReady] = useState(false);
   const [currentPos, setCurrentPos] = useState({ yaw: 0, pitch: 0 });
+  const [currentScene, setCurrentScene] = useState(TOUR_SCENES.defaultScene);
 
   // Load Pannellum CSS and JS
   useEffect(() => {
@@ -59,6 +60,58 @@ export function PannellumViewer({
   const onAddFlashcardRef = useRef(onAddFlashcard);
   useEffect(() => { onAddFlashcardRef.current = onAddFlashcard; }, [onAddFlashcard]);
 
+  // Build scenes configuration for multi-room tour
+  const buildScenesConfig = useCallback(() => {
+    const scenes: any = {};
+
+    TOUR_SCENES.scenes.forEach(scene => {
+      // Get flashcards for this scene (stored with sceneId prefix)
+      const sceneFlashcards = tour.flashcards.filter(fc =>
+        fc.id.startsWith(scene.id + '_') || !fc.id.includes('_')
+      );
+
+      // Build hotspots for this scene
+      const hotSpots: any[] = [];
+
+      // Add flashcard hotspots
+      sceneFlashcards.forEach(fc => {
+        hotSpots.push({
+          id: fc.id,
+          pitch: fc.position.pitch,
+          yaw: fc.position.heading,
+          type: 'info',
+          cssClass: fc.id === selectedFlashcardId ? 'flashcard-hotspot selected' : 'flashcard-hotspot',
+          createTooltipFunc: (div: HTMLElement) => createFlashcardTooltip(div, fc, fc.id === selectedFlashcardId),
+          clickHandlerFunc: () => onSelectFlashcard(fc.id),
+        });
+      });
+
+      // Add navigation hotspots to other rooms
+      TOUR_SCENES.navHotspots
+        .filter(nav => nav.fromScene === scene.id)
+        .forEach(nav => {
+          const targetScene = TOUR_SCENES.scenes.find(s => s.id === nav.toScene);
+          hotSpots.push({
+            id: nav.id,
+            pitch: nav.position.pitch,
+            yaw: nav.position.heading,
+            type: 'scene',
+            sceneId: nav.toScene,
+            text: nav.label || targetScene?.name || 'Go',
+            cssClass: 'nav-hotspot',
+          });
+        });
+
+      scenes[scene.id] = {
+        type: 'equirectangular',
+        panorama: scene.image,
+        hotSpots: hotSpots,
+      };
+    });
+
+    return scenes;
+  }, [tour.flashcards, selectedFlashcardId, onSelectFlashcard]);
+
   // Initialize viewer when ready
   useEffect(() => {
     if (!isReady || !containerRef.current || !window.pannellum) return;
@@ -68,39 +121,31 @@ export function PannellumViewer({
       viewerRef.current.destroy();
     }
 
-    // Create hotspots from flashcards
-    const hotSpots = tour.flashcards.map(fc => ({
-      id: fc.id,
-      pitch: fc.position.pitch,
-      yaw: fc.position.heading,
-      type: 'info',
-      text: fc.question,
-      cssClass: fc.id === selectedFlashcardId ? 'flashcard-hotspot selected' : 'flashcard-hotspot',
-      createTooltipFunc: (hotSpotDiv: HTMLElement) => {
-        createFlashcardTooltip(hotSpotDiv, fc, fc.id === selectedFlashcardId);
-      },
-      clickHandlerFunc: () => {
-        onSelectFlashcard(fc.id);
-      },
-    }));
+    const scenes = buildScenesConfig();
 
-    // Initialize Pannellum
+    // Initialize Pannellum with multi-scene tour
     viewerRef.current = window.pannellum.viewer(containerRef.current, {
-      type: 'equirectangular',
-      panorama: tour.embedUrl,
-      autoLoad: true,
-      showControls: true,  // Show navigation controls
-      mouseZoom: true,
-      keyboardZoom: true,
-      draggable: true,
-      friction: 0.15,
-      yaw: 0,
-      pitch: 0,
-      hfov: 100,
-      minHfov: 50,
-      maxHfov: 120,
-      hotSpots: hotSpots,
-      compass: false,
+      default: {
+        firstScene: currentScene,
+        autoLoad: true,
+        showControls: true,
+        mouseZoom: true,
+        keyboardZoom: true,
+        draggable: true,
+        friction: 0.15,
+        hfov: 100,
+        minHfov: 50,
+        maxHfov: 120,
+        compass: false,
+        sceneFadeDuration: 500,
+      },
+      scenes: scenes,
+    });
+
+    // Track scene changes
+    viewerRef.current.on('scenechange', (sceneId: string) => {
+      console.log('🚶 Moved to scene:', sceneId);
+      setCurrentScene(sceneId);
     });
 
     // Handle click to add flashcard at clicked position
@@ -154,34 +199,7 @@ export function PannellumViewer({
         viewerRef.current = null;
       }
     };
-  }, [isReady, tour.embedUrl, tour.id]);
-
-  // Update hotspots when flashcards change
-  useEffect(() => {
-    if (!viewerRef.current || !isReady) return;
-
-    // Remove all existing hotspots
-    const existingHotspots = viewerRef.current.getConfig().hotSpots || [];
-    existingHotspots.forEach((hs: any) => {
-      try { viewerRef.current.removeHotSpot(hs.id); } catch (e) {}
-    });
-
-    // Add updated hotspots
-    tour.flashcards.forEach(fc => {
-      viewerRef.current.addHotSpot({
-        id: fc.id,
-        pitch: fc.position.pitch,
-        yaw: fc.position.heading,
-        cssClass: fc.id === selectedFlashcardId ? 'flashcard-hotspot selected' : 'flashcard-hotspot',
-        createTooltipFunc: (hotSpotDiv: HTMLElement) => {
-          createFlashcardTooltip(hotSpotDiv, fc, fc.id === selectedFlashcardId);
-        },
-        clickHandlerFunc: () => {
-          onSelectFlashcard(fc.id);
-        },
-      });
-    });
-  }, [tour.flashcards, selectedFlashcardId, isReady, onSelectFlashcard]);
+  }, [isReady, tour.id, buildScenesConfig, currentScene]);
 
   // Create tooltip for flashcard
   const createFlashcardTooltip = useCallback((div: HTMLElement, fc: Flashcard, isSelected: boolean) => {
@@ -226,14 +244,31 @@ export function PannellumViewer({
         <div>Pitch: {currentPos.pitch.toFixed(1)}°</div>
       </div>
 
-      {/* Card count */}
+      {/* Current scene indicator */}
       <div className="absolute bottom-4 left-4 bg-black/70 text-white px-3 py-2 rounded-lg text-sm z-30">
-        🃏 {tour.flashcards.length} card{tour.flashcards.length !== 1 ? 's' : ''}
+        <div className="font-medium">📍 {TOUR_SCENES.scenes.find(s => s.id === currentScene)?.name || currentScene}</div>
+        <div className="text-xs text-gray-400 mt-1">🃏 {tour.flashcards.length} cards total</div>
       </div>
 
-      {/* Tour name */}
-      <div className="absolute bottom-4 right-4 bg-emerald-600 text-white px-3 py-2 rounded-lg text-sm font-medium z-30">
-        🌐 {tour.name}
+      {/* Scene selector */}
+      <div className="absolute bottom-4 right-4 flex gap-2 z-30">
+        {TOUR_SCENES.scenes.map(scene => (
+          <button
+            key={scene.id}
+            onClick={() => {
+              if (viewerRef.current) {
+                viewerRef.current.loadScene(scene.id);
+              }
+            }}
+            className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+              currentScene === scene.id
+                ? 'bg-emerald-600 text-white'
+                : 'bg-black/70 text-white hover:bg-black/90'
+            }`}
+          >
+            {scene.name}
+          </button>
+        ))}
       </div>
 
       {/* Styles for hotspots */}
@@ -298,6 +333,47 @@ export function PannellumViewer({
         }
         .pnlm-hotspot-base {
           cursor: pointer !important;
+        }
+
+        /* Navigation hotspots - floor markers to walk between rooms */
+        .nav-hotspot {
+          width: 50px !important;
+          height: 50px !important;
+          background: rgba(255, 255, 255, 0.9) !important;
+          border-radius: 50% !important;
+          border: 4px solid #10b981 !important;
+          box-shadow: 0 4px 20px rgba(0,0,0,0.4) !important;
+          cursor: pointer !important;
+          transition: all 0.2s ease !important;
+        }
+        .nav-hotspot:hover {
+          transform: scale(1.2) !important;
+          background: #10b981 !important;
+        }
+        .nav-hotspot::before {
+          content: '🚶';
+          font-size: 24px;
+          position: absolute;
+          top: 50%;
+          left: 50%;
+          transform: translate(-50%, -50%);
+        }
+        .nav-hotspot span {
+          position: absolute;
+          bottom: -25px;
+          left: 50%;
+          transform: translateX(-50%);
+          background: rgba(0,0,0,0.8);
+          color: white;
+          padding: 4px 8px;
+          border-radius: 4px;
+          font-size: 12px;
+          white-space: nowrap;
+        }
+
+        /* Pannellum scene transition */
+        .pnlm-render-container {
+          transition: opacity 0.3s ease;
         }
       `}</style>
     </div>
