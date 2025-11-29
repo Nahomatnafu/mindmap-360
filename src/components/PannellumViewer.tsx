@@ -69,13 +69,25 @@ export function PannellumViewer({
       viewerRef.current.destroy();
     }
 
-    // Build scenes with navigation hotspots
+    // Build scenes with navigation hotspots AND flashcard hotspots
     const scenes: any = {};
 
     TOUR_SCENES.scenes.forEach(scene => {
       const hotSpots: any[] = [];
 
-      // Add navigation hotspots to other rooms - make them very visible
+      // Add flashcard hotspots for this scene
+      tour.flashcards.forEach(fc => {
+        hotSpots.push({
+          id: fc.id,
+          pitch: fc.position.pitch,
+          yaw: fc.position.heading,
+          type: 'info',
+          text: fc.question,
+          cssClass: 'flashcard-hotspot',
+        });
+      });
+
+      // Add navigation hotspots to walk between spots
       TOUR_SCENES.navHotspots
         .filter(nav => nav.fromScene === scene.id)
         .forEach(nav => {
@@ -98,7 +110,8 @@ export function PannellumViewer({
     });
 
     console.log('🏠 Initializing tour with scenes:', Object.keys(scenes));
-    console.log('🔗 Navigation hotspots:', TOUR_SCENES.navHotspots);
+    console.log('🃏 Flashcards:', tour.flashcards.length);
+    console.log('🔗 Navigation hotspots:', TOUR_SCENES.navHotspots.length);
 
     // Initialize Pannellum with multi-scene tour
     viewerRef.current = window.pannellum.viewer(containerRef.current, {
@@ -179,7 +192,46 @@ export function PannellumViewer({
     };
   }, [isReady, tour.id]);
 
-  // Create tooltip for flashcard
+  // Update flashcard hotspots when flashcards change
+  useEffect(() => {
+    if (!viewerRef.current || !isReady) return;
+
+    // Get current scene's hotspots
+    const viewer = viewerRef.current;
+
+    // Remove existing flashcard hotspots (keep nav hotspots)
+    tour.flashcards.forEach(fc => {
+      try {
+        viewer.removeHotSpot(fc.id);
+      } catch (e) {
+        // Hotspot might not exist yet
+      }
+    });
+
+    // Add all flashcard hotspots
+    tour.flashcards.forEach(fc => {
+      const isSelected = fc.id === selectedFlashcardId;
+      try {
+        viewer.addHotSpot({
+          id: fc.id,
+          pitch: fc.position.pitch,
+          yaw: fc.position.heading,
+          type: 'info',
+          text: isSelected && mode === 'view' ? fc.answer : fc.question,
+          cssClass: isSelected ? 'flashcard-hotspot selected' : 'flashcard-hotspot',
+          clickHandlerFunc: () => {
+            onSelectFlashcard(fc.id);
+          },
+        });
+      } catch (e) {
+        console.log('Error adding hotspot:', e);
+      }
+    });
+
+    console.log('🃏 Updated flashcard hotspots:', tour.flashcards.length);
+  }, [tour.flashcards, selectedFlashcardId, mode, isReady, onSelectFlashcard]);
+
+  // Unused but kept for reference
   const createFlashcardTooltip = useCallback((div: HTMLElement, fc: Flashcard, isSelected: boolean) => {
     div.classList.add('flashcard-tooltip');
     const showAnswer = isSelected && mode === 'view';
