@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { Tour, AppMode, Position, Flashcard } from '@/types';
-import { KuulaViewer } from './KuulaViewer';
+import { PannellumViewer } from './PannellumViewer';
 
 interface TourViewerProps {
   tour: Tour;
@@ -22,9 +22,9 @@ export function TourViewer({
   onAddFlashcard,
   onDeleteFlashcard,
 }: TourViewerProps) {
-  // Use KuulaViewer for Kuula tours (supports 3D positioned flashcards!)
+  // Use PannellumViewer for panorama tours - full control with hotspot anchoring!
   return (
-    <KuulaViewer
+    <PannellumViewer
       tour={tour}
       mode={mode}
       selectedFlashcardId={selectedFlashcardId}

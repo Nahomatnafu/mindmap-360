@@ -21,7 +21,7 @@ export interface Tour {
   id: string;
   name: string;
   description?: string;
-  type: 'matterport' | 'kuula';
+  type: 'matterport' | 'kuula' | 'panorama';
   embedUrl: string;
   tourId: string;
   flashcards: Flashcard[];
@@ -75,14 +75,30 @@ export function createEmbedUrl(type: Tour['type'], tourId: string): string {
   return `https://kuula.co/share/collection/${tourId}?logo=1&info=1&fs=1&vr=0&sd=1&thumbs=1`;
 }
 
-// Default sample tour using Kuula
+// Default sample tours - using local 360 images with Pannellum
 export const SAMPLE_TOURS: Omit<Tour, 'id' | 'createdAt' | 'updatedAt'>[] = [
   {
-    name: 'My 360 Tour',
-    description: 'Interactive 360° tour with Kuula',
-    type: 'kuula',
-    tourId: '7fW2v',
-    embedUrl: 'https://kuula.co/share/collection/7fW2v?logo=0&info=1&fs=1&vr=0&sd=1&thumbs=1',
+    name: 'Room 1',
+    description: '360° panorama with Pannellum viewer',
+    type: 'panorama',
+    tourId: 'room1',
+    embedUrl: '/tours/room1.jpg',
+    flashcards: [],
+  },
+  {
+    name: 'Room 2',
+    description: '360° panorama with Pannellum viewer',
+    type: 'panorama',
+    tourId: 'room2',
+    embedUrl: '/tours/room2.jpg',
+    flashcards: [],
+  },
+  {
+    name: 'Room 3',
+    description: '360° panorama with Pannellum viewer',
+    type: 'panorama',
+    tourId: 'room3',
+    embedUrl: '/tours/room3.jpg',
     flashcards: [],
   },
 ];
