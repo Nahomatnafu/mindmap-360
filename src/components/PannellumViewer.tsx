@@ -213,7 +213,9 @@ export function PannellumViewer({
       <div className={`absolute top-4 left-1/2 -translate-x-1/2 px-4 py-2 rounded-full font-medium shadow-lg z-30 pointer-events-none ${
         mode === 'edit' ? 'bg-yellow-500 text-black' : 'bg-blue-600 text-white'
       }`}>
-        {mode === 'edit' ? '📝 Click anywhere to add flashcard • Drag to look around' : '👁️ Drag to look around • Click cards to flip'}
+        {mode === 'edit'
+          ? '📝 Click to add flashcard • Look down for walk hotspots'
+          : '👁️ Look down & click hotspots to walk • Click cards to flip'}
       </div>
 
       {/* Position display */}
