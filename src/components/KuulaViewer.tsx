@@ -32,12 +32,13 @@ export function KuulaViewer({
   onAddFlashcard,
   onDeleteFlashcard,
 }: KuulaViewerProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
   const [frameId, setFrameId] = useState<string | null>(null);
   const [orientation, setOrientation] = useState({ heading: 0, pitch: 0, zoom: 0 });
   const [isApiReady, setIsApiReady] = useState(false);
   const orientationRef = useRef(orientation);
-  
-  // Keep ref updated
+
+  // Keep ref updated for use in callbacks
   useEffect(() => { orientationRef.current = orientation; }, [orientation]);
 
   // Load Kuula API script
@@ -46,7 +47,7 @@ export function KuulaViewer({
       setIsApiReady(true);
       return;
     }
-    
+
     const script = document.createElement('script');
     script.src = 'https://static.kuula.io/api.js';
     script.async = true;
@@ -59,7 +60,7 @@ export function KuulaViewer({
     if (!isApiReady || !window.KuulaPlayerAPI) return;
 
     const handleFrameLoaded = (e: any) => {
-      console.log('Kuula frame loaded:', e.frame);
+      console.log('✅ Kuula frame loaded:', e.frame);
       setFrameId(e.frame);
     };
 
@@ -80,72 +81,56 @@ export function KuulaViewer({
     };
   }, [isApiReady]);
 
-  // Handle adding flashcard at current position
+  // Handle adding flashcard at EXACT current position
   const handleAddFlashcard = useCallback(() => {
     if (mode !== 'edit') return;
-    onAddFlashcard({
+
+    // Store the EXACT heading and pitch from Kuula
+    const pos = {
       heading: orientationRef.current.heading,
       pitch: orientationRef.current.pitch,
-    });
+    };
+    console.log('📍 Adding flashcard at:', pos);
+    onAddFlashcard(pos);
   }, [mode, onAddFlashcard]);
 
-  // Normalize heading difference to -180 to 180 range
-  const normalizeHeading = (diff: number) => {
-    while (diff > 180) diff -= 360;
-    while (diff < -180) diff += 360;
-    return diff;
+  // Normalize angle to -180 to 180
+  const normalizeAngle = (angle: number): number => {
+    while (angle > 180) angle -= 360;
+    while (angle < -180) angle += 360;
+    return angle;
   };
 
-  // Calculate FOV based on zoom level
-  // Kuula zoom: -1 (zoomed in) to 1 (zoomed out)
-  // Base FOV at zoom=0, adjusted by zoom level
-  const getEffectiveFOV = useCallback(() => {
-    const baseH = 90;  // Base horizontal FOV
-    const baseV = 70;  // Base vertical FOV
-    // Zoom adjusts FOV: zoomed in = smaller FOV, zoomed out = larger FOV
-    const zoomFactor = 1 + (orientation.zoom * 0.5); // -1 zoom = 0.5x, +1 zoom = 1.5x
+  // Get screen position for a flashcard
+  // This uses a direct linear mapping calibrated for Kuula's viewer
+  const getFlashcardStyle = useCallback((flashcard: Flashcard): React.CSSProperties | null => {
+    // Calculate angular difference from current view
+    const dHeading = normalizeAngle(flashcard.position.heading - orientation.heading);
+    const dPitch = flashcard.position.pitch - orientation.pitch;
+
+    // Kuula's approximate visible range (calibrated values)
+    // These define how many degrees are visible on screen
+    const visibleH = 100 * (1 - orientation.zoom * 0.3); // ~100° horizontal at zoom 0
+    const visibleV = 75 * (1 - orientation.zoom * 0.3);  // ~75° vertical at zoom 0
+
+    // Check if within visible range
+    if (Math.abs(dHeading) > visibleH / 2 || Math.abs(dPitch) > visibleV / 2) {
+      return null; // Not visible
+    }
+
+    // Map angular position to screen percentage
+    // Center of screen is 50%, edges are 0% and 100%
+    const screenX = 50 + (dHeading / visibleH) * 100;
+    const screenY = 50 - (dPitch / visibleV) * 100;
+
     return {
-      h: baseH * zoomFactor,
-      v: baseV * zoomFactor
+      position: 'absolute' as const,
+      left: `${screenX}%`,
+      top: `${screenY}%`,
+      transform: 'translate(-50%, -50%)',
+      transition: 'left 0.05s linear, top 0.05s linear', // Smooth movement
     };
-  }, [orientation.zoom]);
-
-  // Check if a flashcard is visible based on current orientation
-  const isFlashcardVisible = useCallback((flashcard: Flashcard) => {
-    const fov = getEffectiveFOV();
-    const headingDiff = normalizeHeading(flashcard.position.heading - orientation.heading);
-    const pitchDiff = flashcard.position.pitch - orientation.pitch;
-
-    // Visible if within half the FOV on each axis (with margin)
-    const hVisible = Math.abs(headingDiff) < (fov.h / 2) + 10;
-    const vVisible = Math.abs(pitchDiff) < (fov.v / 2) + 10;
-
-    return hVisible && vVisible;
-  }, [orientation, getEffectiveFOV]);
-
-  // Calculate screen position for a flashcard using proper spherical projection
-  const getScreenPosition = useCallback((flashcard: Flashcard) => {
-    const fov = getEffectiveFOV();
-    const headingDiff = normalizeHeading(flashcard.position.heading - orientation.heading);
-    const pitchDiff = flashcard.position.pitch - orientation.pitch;
-
-    // Convert angular difference to screen position using perspective projection
-    const hFovRad = (fov.h / 2) * (Math.PI / 180);
-    const vFovRad = (fov.v / 2) * (Math.PI / 180);
-
-    const headingRad = headingDiff * (Math.PI / 180);
-    const pitchRad = pitchDiff * (Math.PI / 180);
-
-    // Project to screen coordinates
-    const x = 50 + (Math.tan(headingRad) / Math.tan(hFovRad)) * 50;
-    const y = 50 - (Math.tan(pitchRad) / Math.tan(vFovRad)) * 50;
-
-    // Clamp to screen bounds
-    return {
-      x: Math.max(2, Math.min(98, x)),
-      y: Math.max(2, Math.min(98, y))
-    };
-  }, [orientation, getEffectiveFOV]);
+  }, [orientation]);
 
   const embedUrl = tour.embedUrl + '&chromeless=1';
 
@@ -160,19 +145,22 @@ export function KuulaViewer({
         title={tour.name}
       />
 
-      {/* Flashcard markers - only visible ones */}
-      <div className="absolute inset-0 pointer-events-none z-20">
-        {tour.flashcards.filter(isFlashcardVisible).map(flashcard => {
-          const pos = getScreenPosition(flashcard);
+      {/* Flashcard markers - rendered at their exact saved positions */}
+      <div ref={containerRef} className="absolute inset-0 pointer-events-none z-20">
+        {tour.flashcards.map(flashcard => {
+          const style = getFlashcardStyle(flashcard);
+          if (!style) return null; // Not visible
+
           const isSelected = flashcard.id === selectedFlashcardId;
           return (
             <div
               key={flashcard.id}
-              className="absolute pointer-events-auto transition-all duration-150"
-              style={{ left: `${pos.x}%`, top: `${pos.y}%`, transform: 'translate(-50%, -50%)' }}
+              className="pointer-events-auto"
+              style={style}
               onClick={() => onSelectFlashcard(flashcard.id)}
             >
-              <div className={`bg-white rounded-xl shadow-2xl p-3 min-w-[160px] max-w-[200px] border-l-4 ${isSelected ? 'scale-110' : ''}`}
+              <div className={`bg-white rounded-xl shadow-2xl p-3 min-w-40 max-w-[200px] border-l-4 cursor-pointer
+                              ${isSelected ? 'scale-110 ring-2 ring-yellow-400' : 'hover:scale-105'}`}
                    style={{ borderColor: flashcard.color || '#3b82f6' }}>
                 <div className="flex items-center gap-2 mb-2">
                   <div className="w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-bold"
@@ -195,6 +183,10 @@ export function KuulaViewer({
                     {isSelected ? 'Click to see question' : 'Click to reveal'}
                   </p>
                 )}
+                {/* Debug: show saved position */}
+                <p className="text-[10px] text-gray-300 mt-1">
+                  H:{flashcard.position.heading.toFixed(1)}° P:{flashcard.position.pitch.toFixed(1)}°
+                </p>
               </div>
             </div>
           );
@@ -237,7 +229,6 @@ export function KuulaViewer({
       {/* Card count */}
       <div className="absolute bottom-4 left-4 bg-black/70 text-white px-3 py-2 rounded-lg text-sm z-30">
         🃏 {tour.flashcards.length} card{tour.flashcards.length !== 1 ? 's' : ''}
-        ({tour.flashcards.filter(isFlashcardVisible).length} visible)
       </div>
 
       {/* Tour name */}
