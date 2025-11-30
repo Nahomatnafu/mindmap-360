@@ -116,7 +116,7 @@ export function PannellumViewer({
     // Initialize Pannellum with multi-scene tour
     viewerRef.current = window.pannellum.viewer(containerRef.current, {
       default: {
-        firstScene: 'room1',
+        firstScene: TOUR_SCENES.defaultScene,
         autoLoad: true,
         showControls: true,
         mouseZoom: true,
@@ -128,7 +128,7 @@ export function PannellumViewer({
         maxHfov: 120,
         compass: false,
         sceneFadeDuration: 1000,
-        hotSpotDebug: true, // Show hotspot positions for debugging
+        hotSpotDebug: false, // Cleaner look
       },
       scenes: scenes,
     });

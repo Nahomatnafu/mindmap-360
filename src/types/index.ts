@@ -98,33 +98,25 @@ export interface TourConfig {
 // Default sample tour - single room with multiple viewpoints
 export const SAMPLE_TOURS: Omit<Tour, 'id' | 'createdAt' | 'updatedAt'>[] = [
   {
-    name: 'Room Tour',
-    description: '360° tour with multiple viewpoints - click hotspots to walk around',
+    name: 'Kitchen Tour',
+    description: 'Matterport sample kitchen - testing flashcard placement',
     type: 'panorama',
-    tourId: 'room-tour',
-    embedUrl: '/tours/room1.jpg',
+    tourId: 'kitchen-tour',
+    embedUrl: '/tours/kitchen_sample/Get-Started-Kitchen.jpg',
     flashcards: [],
   },
 ];
 
-// Tour scenes configuration - 3 spots in the same room
+// Tour scenes configuration - Using Matterport sample kitchen images
 export const TOUR_SCENES: TourConfig = {
   scenes: [
-    { id: 'room1', name: 'Spot 1', image: '/tours/room1.jpg' },
-    { id: 'room2', name: 'Spot 2', image: '/tours/room2.jpg' },
-    { id: 'room3', name: 'Spot 3', image: '/tours/room3.jpg' },
+    // Just the first kitchen image for now - single viewpoint
+    { id: 'kitchen1', name: 'Kitchen View', image: '/tours/kitchen_sample/Get-Started-Kitchen.jpg' },
   ],
   navHotspots: [
-    // From Spot 1 - walk to Spot 2 and Spot 3
-    { id: 'nav1-2', fromScene: 'room1', toScene: 'room2', position: { heading: 0, pitch: -25 }, label: 'Walk forward' },
-    { id: 'nav1-3', fromScene: 'room1', toScene: 'room3', position: { heading: 180, pitch: -25 }, label: 'Walk back' },
-    // From Spot 2 - walk to Spot 1 and Spot 3
-    { id: 'nav2-1', fromScene: 'room2', toScene: 'room1', position: { heading: 180, pitch: -25 }, label: 'Walk back' },
-    { id: 'nav2-3', fromScene: 'room2', toScene: 'room3', position: { heading: 0, pitch: -25 }, label: 'Walk forward' },
-    // From Spot 3 - walk to Spot 1 and Spot 2
-    { id: 'nav3-2', fromScene: 'room3', toScene: 'room2', position: { heading: 180, pitch: -25 }, label: 'Walk back' },
-    { id: 'nav3-1', fromScene: 'room3', toScene: 'room1', position: { heading: 0, pitch: -25 }, label: 'Walk to start' },
+    // No navigation hotspots yet - single viewpoint
+    // We'll add more when you capture multiple spots from the same room
   ],
-  defaultScene: 'room1',
+  defaultScene: 'kitchen1',
 };
 

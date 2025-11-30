@@ -22,7 +22,7 @@ export function TourViewer({
   onAddFlashcard,
   onDeleteFlashcard,
 }: TourViewerProps) {
-  // Use PannellumViewer for panorama tours - full control with hotspot anchoring!
+  // Use PannellumViewer for 360° panorama tours with hotspot anchoring
   return (
     <PannellumViewer
       tour={tour}
