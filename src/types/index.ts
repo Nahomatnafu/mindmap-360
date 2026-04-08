@@ -105,6 +105,14 @@ export const SAMPLE_TOURS: Omit<Tour, 'id' | 'createdAt' | 'updatedAt'>[] = [
     embedUrl: '/tours/room1.jpg',
     flashcards: [],
   },
+  {
+    name: 'Kuula Tour',
+    description: 'Walkable Kuula tour — place flashcards on any object in the space',
+    type: 'kuula',
+    tourId: '7KmDm',
+    embedUrl: 'https://kuula.co/share/collection/7KmDm?logo=1&info=1&fs=1&vr=0&sd=1&thumbs=1',
+    flashcards: [],
+  },
 ];
 
 // Tour scenes configuration - 3 spots in the same room
