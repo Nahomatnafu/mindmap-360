@@ -1,21 +1,24 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Crimson_Pro, DM_Mono } from "next/font/google";
 import "./globals.css";
 import { TourProvider } from "@/context/TourContext";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const crimsonPro = Crimson_Pro({
+  variable: "--font-crimson",
   subsets: ["latin"],
+  weight: ["300", "400", "600"],
+  style: ["normal", "italic"],
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const dmMono = DM_Mono({
+  variable: "--font-dm-mono",
   subsets: ["latin"],
+  weight: ["300", "400", "500"],
 });
 
 export const metadata: Metadata = {
-  title: "MindMap 360 - Flashcards in Virtual Tours",
-  description: "Learn with flashcards placed in 360° virtual tours using the memory palace technique",
+  title: "MindMap 360 — Memory Palace",
+  description: "Anchor flashcards to real spaces. Learn through place.",
 };
 
 export default function RootLayout({
@@ -25,9 +28,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
+      <body className={`${crimsonPro.variable} ${dmMono.variable} antialiased`}>
         <TourProvider>
           {children}
         </TourProvider>

@@ -1,49 +1,81 @@
 @import "tailwindcss";
 
+/* ─── Design tokens ───────────────────────────────────────────────── */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --bg:          #080810;
+  --panel:       #0f0f1a;
+  --panel-light: #16162a;
+  --border:      #2a2a4a;
+  --gold:        #c9a84c;
+  --gold-dim:    #7a6530;
+  --gold-bright: #e8c96e;
+  --text:        #d0cfe8;
+  --text-dim:    #6b6a8a;
+  --danger:      #c94c4c;
+
+  --font-content: var(--font-crimson), "Crimson Pro", Georgia, serif;
+  --font-ui:      var(--font-dm-mono), "DM Mono", "Courier New", monospace;
+
+  --background: var(--bg);
+  --foreground: var(--text);
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-background: var(--bg);
+  --color-foreground: var(--text);
+  --font-sans: var(--font-ui);
+  --font-mono: var(--font-ui);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
+/* ─── Base ────────────────────────────────────────────────────────── */
 html, body {
   height: 100%;
   margin: 0;
   padding: 0;
   overflow: hidden;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  letter-spacing: 0.02em;
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
-}
+/* ─── Thin scrollbar ──────────────────────────────────────────────── */
+::-webkit-scrollbar       { width: 4px; }
+::-webkit-scrollbar-track { background: var(--panel); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: var(--gold-dim); }
 
-/* Flashcard marker animation */
+/* ─── Pulse-ring animation ────────────────────────────────────────── */
 @keyframes pulse-ring {
-  0% {
-    transform: scale(1);
-    opacity: 0.3;
-  }
-  100% {
-    transform: scale(1.5);
-    opacity: 0;
-  }
+  0%   { transform: translate(-50%, -50%) scale(1);   opacity: 0.6; }
+  100% { transform: translate(-50%, -50%) scale(2.8); opacity: 0; }
 }
 
-.flashcard-marker .animate-ping {
-  animation: pulse-ring 1.5s ease-out infinite;
+.marker-ring {
+  position: absolute;
+  top: 50%; left: 50%;
+  width: 20px; height: 20px;
+  border: 1.5px solid var(--gold);
+  border-radius: 50%;
+  animation: pulse-ring 2s ease-out infinite;
+  pointer-events: none;
+}
+.marker-ring:nth-child(2) { animation-delay: 0.7s; }
+
+/* ─── Marker dot ──────────────────────────────────────────────────── */
+.marker-dot {
+  width: 12px; height: 12px;
+  background: var(--gold);
+  border-radius: 50%;
+  box-shadow: 0 0 8px var(--gold), 0 0 20px var(--gold-dim);
+  cursor: pointer;
+  transition: transform 0.15s, box-shadow 0.15s;
+  position: relative;
+  z-index: 1;
+}
+.marker-dot:hover,
+.marker-dot.selected {
+  transform: scale(1.4);
+  box-shadow: 0 0 12px var(--gold-bright), 0 0 30px var(--gold);
 }

@@ -46,78 +46,77 @@ export function FlashcardEditor({ flashcard, position, isOpen, onClose, onSave }
 
   if (!isOpen) return null;
 
+  const inputStyle: React.CSSProperties = {
+    width: '100%', padding: '8px 12px', borderRadius: 4,
+    background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)',
+    color: 'var(--text)', fontFamily: 'var(--font-content)', fontSize: 15,
+    outline: 'none', resize: 'none' as const, lineHeight: 1.6,
+  };
+  const labelStyle: React.CSSProperties = {
+    display: 'block', marginBottom: 5, fontSize: 10,
+    color: 'var(--text-dim)', letterSpacing: '0.1em', textTransform: 'uppercase' as const,
+    fontFamily: 'var(--font-ui)',
+  };
+
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={onClose}>
-      <div 
-        className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6 m-4"
-        onClick={e => e.stopPropagation()}
-      >
-        <h2 className="text-xl font-bold text-gray-800 mb-4">
-          {flashcard ? 'Edit Flashcard' : 'Add New Flashcard'}
-        </h2>
+    <div className="fixed inset-0 flex items-center justify-center z-50"
+      style={{ background: 'rgba(8,8,16,0.75)' }} onClick={onClose}>
+      <div className="w-full max-w-md m-4 rounded shadow-2xl"
+        style={{ background: 'var(--panel)', border: '1px solid var(--border)' }}
+        onClick={e => e.stopPropagation()}>
 
-        <form onSubmit={handleSubmit}>
-          <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Question
-            </label>
-            <textarea
-              value={question}
-              onChange={e => setQuestion(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900"
-              rows={2}
-              placeholder="What do you want to remember?"
-              autoFocus
-            />
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4"
+          style={{ borderBottom: '1px solid var(--border)' }}>
+          <h2 style={{ fontFamily: 'var(--font-content)', fontSize: 20, color: 'var(--text)', fontWeight: 300 }}>
+            {flashcard ? 'Edit Marker' : 'New Marker'}
+          </h2>
+          <button onClick={onClose} style={{ color: 'var(--text-dim)', background: 'none', border: 'none', fontSize: 16, cursor: 'pointer' }}>✕</button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4 p-5">
+          <div>
+            <label style={labelStyle}>Question</label>
+            <textarea value={question} onChange={e => setQuestion(e.target.value)}
+              style={inputStyle} rows={2} placeholder="What do you want to remember?" autoFocus />
           </div>
 
-          <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Answer
-            </label>
-            <textarea
-              value={answer}
-              onChange={e => setAnswer(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900"
-              rows={3}
-              placeholder="The answer or information to recall"
-            />
+          <div>
+            <label style={labelStyle}>Answer</label>
+            <textarea value={answer} onChange={e => setAnswer(e.target.value)}
+              style={inputStyle} rows={3} placeholder="The answer or information to recall" />
           </div>
 
-          <div className="mb-6">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Marker Color
-            </label>
-            <div className="flex gap-2">
+          <div>
+            <label style={labelStyle}>Marker Color</label>
+            <div className="flex gap-2 mt-1">
               {COLORS.map(c => (
-                <button
-                  key={c.value}
-                  type="button"
-                  onClick={() => setColor(c.value)}
-                  className={`w-8 h-8 rounded-full transition-transform ${
-                    color === c.value ? 'scale-125 ring-2 ring-offset-2 ring-gray-400' : ''
-                  }`}
-                  style={{ backgroundColor: c.value }}
-                  title={c.name}
-                />
+                <button key={c.value} type="button" onClick={() => setColor(c.value)}
+                  className="w-7 h-7 rounded-full transition-transform"
+                  style={{
+                    backgroundColor: c.value,
+                    transform: color === c.value ? 'scale(1.3)' : 'scale(1)',
+                    outline: color === c.value ? `2px solid ${c.value}` : 'none',
+                    outlineOffset: 2,
+                  }} title={c.name} />
               ))}
             </div>
           </div>
 
-          <div className="flex gap-3 justify-end">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 text-gray-600 hover:text-gray-800 font-medium"
-            >
+          <div className="flex gap-2 pt-1">
+            <button type="button" onClick={onClose} className="flex-1 py-2 rounded text-xs uppercase tracking-widest transition-colors"
+              style={{ border: '1px solid var(--border)', color: 'var(--text-dim)', background: 'transparent', fontFamily: 'var(--font-ui)', cursor: 'pointer' }}>
               Cancel
             </button>
-            <button
-              type="submit"
-              disabled={!question.trim() || !answer.trim()}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
-            >
-              {flashcard ? 'Update' : 'Add'} Flashcard
+            <button type="submit" disabled={!question.trim() || !answer.trim()}
+              className="flex-1 py-2 rounded text-xs uppercase tracking-widest transition-colors"
+              style={{
+                background: 'var(--gold-dim)', border: '1px solid var(--gold)',
+                color: 'var(--gold-bright)', fontFamily: 'var(--font-ui)',
+                cursor: !question.trim() || !answer.trim() ? 'not-allowed' : 'pointer',
+                opacity: !question.trim() || !answer.trim() ? 0.4 : 1,
+              }}>
+              {flashcard ? 'Update' : 'Save'} Marker
             </button>
           </div>
         </form>

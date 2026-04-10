@@ -26,6 +26,76 @@ declare global {
   }
 }
 
+/* ─── 3-D spherical projection helpers (ported from memory-palace.html) ── */
+const DEG = Math.PI / 180;
+
+function getHFovRad(zoom: number): number {
+  // zoom: -1 (narrow) → +1 (wide). Maps to roughly 47°–103° horizontal FOV.
+  return Math.max(40, Math.min(130, 75 + zoom * 28)) * DEG;
+}
+
+function projectToScreen(
+  aH: number, aP: number,
+  ori: { heading: number; pitch: number; zoom: number },
+  W: number, H: number,
+): { x: number; y: number; visible: boolean } {
+  const f = (W / 2) / Math.tan(getHFovRad(ori.zoom) / 2);
+
+  // Anchor → world-space unit vector
+  const aH_r = aH * DEG, aP_r = aP * DEG;
+  const px = Math.cos(aP_r) * Math.sin(aH_r);
+  const py = Math.sin(aP_r);
+  const pz = Math.cos(aP_r) * Math.cos(aH_r);
+
+  // Rotate into camera space: first by -heading (Y axis), then by -pitch (X axis)
+  const cH = ori.heading * DEG, cP = ori.pitch * DEG;
+  const cosH = Math.cos(cH), sinH = Math.sin(cH);
+  const rx = px * cosH - pz * sinH;
+  const ry = py;
+  const rz = px * sinH + pz * cosH;
+
+  const cosP = Math.cos(cP), sinP = Math.sin(cP);
+  const ex = rx;
+  const ey =  ry * cosP + rz * sinP;
+  const ez = -ry * sinP + rz * cosP;
+
+  if (ez <= 0.001) return { x: -9999, y: -9999, visible: false };
+
+  const sx = W / 2 + f * (ex / ez);
+  const sy = H / 2 - f * (ey / ez);
+  const m = 60;
+  return { x: sx, y: sy, visible: sx > -m && sx < W + m && sy > -m && sy < H + m };
+}
+
+function screenToWorld(
+  clickX: number, clickY: number,
+  ori: { heading: number; pitch: number; zoom: number },
+  W: number, H: number,
+): { heading: number; pitch: number } {
+  const f = (W / 2) / Math.tan(getHFovRad(ori.zoom) / 2);
+  // Screen pixel → camera-space ray
+  const cx = clickX - W / 2;
+  const cy = -(clickY - H / 2);
+  const len = Math.sqrt(cx * cx + cy * cy + f * f);
+  const ex = cx / len, ey = cy / len, ez = f / len;
+
+  // Inverse rotation: undo pitch then heading
+  const cH = ori.heading * DEG, cP = ori.pitch * DEG;
+  const cosP = Math.cos(cP), sinP = Math.sin(cP);
+  const rx = ex;
+  const ry = ey * cosP - ez * sinP;
+  const rz = ey * sinP + ez * cosP;
+
+  const cosH = Math.cos(cH), sinH = Math.sin(cH);
+  const wx =  rx * cosH + rz * sinH;
+  const wy =  ry;
+  const wz = -rx * sinH + rz * cosH;
+
+  const pitch = Math.asin(Math.max(-1, Math.min(1, wy))) / DEG;
+  const heading = (((Math.atan2(wx, wz) / DEG) % 360) + 360) % 360;
+  return { heading, pitch };
+}
+
 export function KuulaViewer({
   tour,
   mode,
@@ -34,15 +104,15 @@ export function KuulaViewer({
   onAddFlashcard,
   onDeleteFlashcard,
 }: KuulaViewerProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [frameId, setFrameId] = useState<string | null>(null);
+  const wrapRef   = useRef<HTMLDivElement>(null);
+  const [frameId, setFrameId]       = useState<string | null>(null);
   const [currentRoom, setCurrentRoom] = useState<string>('');
   const [orientation, setOrientation] = useState({ heading: 0, pitch: 0, zoom: 0 });
-  const [isApiReady, setIsApiReady] = useState(false);
+  const [isApiReady, setIsApiReady]  = useState(false);
+  const [pinMode, setPinMode]        = useState(false);
   const orientationRef = useRef(orientation);
-  const modeRef = useRef(mode);
+  const modeRef        = useRef(mode);
 
-  // Keep refs updated for use in event callbacks
   useEffect(() => { orientationRef.current = orientation; }, [orientation]);
   useEffect(() => { modeRef.current = mode; }, [mode]);
 
@@ -126,157 +196,117 @@ export function KuulaViewer({
     };
   }, [isApiReady, tour.flashcards, onSelectFlashcard]);
 
-  // Place a new flashcard at the exact current camera position
-  const handleAddFlashcard = useCallback(() => {
-    const pos: Position = {
-      heading: orientationRef.current.heading,
-      pitch: orientationRef.current.pitch,
-    };
-    console.log('📍 Placing flashcard at:', pos);
+  // Pin mode click → inverse-project pixel to world heading/pitch
+  const handleOverlayClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    if (!pinMode || !wrapRef.current) return;
+    const rect = wrapRef.current.getBoundingClientRect();
+    const pos = screenToWorld(
+      e.clientX - rect.left, e.clientY - rect.top,
+      orientationRef.current,
+      rect.width, rect.height,
+    );
+    setPinMode(false);
     onAddFlashcard(pos);
-  }, [onAddFlashcard]);
+  }, [pinMode, onAddFlashcard]);
 
-  // Normalize angle to -180 to 180
-  const normalizeAngle = (angle: number): number => {
-    while (angle > 180) angle -= 360;
-    while (angle < -180) angle += 360;
-    return angle;
-  };
-
-  // Get screen position for a flashcard
-  // This uses a direct linear mapping calibrated for Kuula's viewer
-  const getFlashcardStyle = useCallback((flashcard: Flashcard): React.CSSProperties | null => {
-    // Calculate angular difference from current view
-    const dHeading = normalizeAngle(flashcard.position.heading - orientation.heading);
-    const dPitch = flashcard.position.pitch - orientation.pitch;
-
-    // Kuula's approximate visible range (calibrated values)
-    // These define how many degrees are visible on screen
-    const visibleH = 100 * (1 - orientation.zoom * 0.3); // ~100° horizontal at zoom 0
-    const visibleV = 75 * (1 - orientation.zoom * 0.3);  // ~75° vertical at zoom 0
-
-    // Check if within visible range
-    if (Math.abs(dHeading) > visibleH / 2 || Math.abs(dPitch) > visibleV / 2) {
-      return null; // Not visible
-    }
-
-    // Map angular position to screen percentage
-    // Center of screen is 50%, edges are 0% and 100%
-    const screenX = 50 + (dHeading / visibleH) * 100;
-    const screenY = 50 - (dPitch / visibleV) * 100;
-
-    return {
-      position: 'absolute' as const,
-      left: `${screenX}%`,
-      top: `${screenY}%`,
-      transform: 'translate(-50%, -50%)',
-      transition: 'left 0.05s linear, top 0.05s linear', // Smooth movement
-    };
+  // Project each flashcard's anchor to screen pixel coords
+  const getMarkerPos = useCallback((flashcard: Flashcard) => {
+    if (!wrapRef.current) return null;
+    const { offsetWidth: W, offsetHeight: H } = wrapRef.current;
+    return projectToScreen(flashcard.position.heading, flashcard.position.pitch, orientation, W, H);
   }, [orientation]);
 
-  // Use the tour's embedUrl as-is — keeps Kuula's navigation thumbs and UI intact
   const embedUrl = tour.embedUrl;
 
   return (
-    <div className="relative w-full h-full bg-gray-900 overflow-hidden">
+    <div ref={wrapRef} className="relative w-full h-full overflow-hidden" style={{ background: 'var(--bg)' }}>
+
       {/* Kuula iframe */}
-      <iframe
-        src={embedUrl}
-        className="absolute inset-0 w-full h-full border-0"
-        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; xr-spatial-tracking; fullscreen"
-        allowFullScreen
-        title={tour.name}
-      />
+      <iframe src={embedUrl} className="absolute inset-0 w-full h-full border-0"
+        allow="accelerometer; autoplay; gyroscope; xr-spatial-tracking; fullscreen"
+        allowFullScreen title={tour.name} />
 
-      {/* Flashcard overlays — positioned relative to current camera orientation */}
-      <div ref={containerRef} className="absolute inset-0 pointer-events-none z-20">
+      {/* Pin-mode click overlay — only captures pointer when active */}
+      <div className="absolute inset-0 z-10"
+        style={{ cursor: pinMode ? 'crosshair' : 'default', pointerEvents: pinMode ? 'all' : 'none' }}
+        onClick={handleOverlayClick} />
+
+      {/* Pin-mode banner */}
+      {pinMode && (
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-30 px-5 py-2 rounded text-xs uppercase tracking-widest pointer-events-none"
+          style={{ background: 'rgba(201,168,76,0.12)', border: '1px solid var(--gold)', color: 'var(--gold-bright)', fontFamily: 'var(--font-ui)' }}>
+          Click anywhere to place a marker
+        </div>
+      )}
+
+      {/* Flashcard markers — gold dots with pulse rings, pixel-accurate */}
+      <div className="absolute inset-0 pointer-events-none z-20">
         {tour.flashcards.map(flashcard => {
-          const style = getFlashcardStyle(flashcard);
-          if (!style) return null;
-
+          const pos = getMarkerPos(flashcard);
+          if (!pos || !pos.visible) return null;
           const isSelected = flashcard.id === selectedFlashcardId;
-          const cardColor = flashcard.color || '#3b82f6';
           return (
-            <div key={flashcard.id} className="pointer-events-auto" style={style}>
-              <div
-                onClick={() => onSelectFlashcard(flashcard.id)}
-                className={`bg-white rounded-xl shadow-2xl p-3 w-48 border-l-4 cursor-pointer transition-transform
-                  ${isSelected ? 'scale-110 ring-2 ring-yellow-400' : 'hover:scale-105'}`}
-                style={{ borderColor: cardColor }}
-              >
-                <div className="flex items-center gap-2 mb-2">
-                  <div className="w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-bold"
-                       style={{ background: cardColor }}>
-                    {isSelected && mode === 'view' ? '✓' : '?'}
+            <div key={flashcard.id} className="absolute pointer-events-auto"
+              style={{ left: pos.x, top: pos.y }}>
+              {/* Pulse rings */}
+              <div className="marker-ring" />
+              <div className="marker-ring" />
+              {/* Gold dot */}
+              <div className={`marker-dot${isSelected ? ' selected' : ''}`}
+                onClick={() => onSelectFlashcard(flashcard.id)} />
+              {/* Card popup on select */}
+              {isSelected && (
+                <div className="absolute bottom-6 left-1/2 -translate-x-1/2 w-52 rounded shadow-2xl z-30"
+                  style={{ background: 'var(--panel)', border: '1px solid var(--border)' }}>
+                  <div className="px-4 pt-3 pb-1" style={{ borderBottom: '1px solid var(--border)' }}>
+                    <div className="text-xs uppercase tracking-widest mb-1" style={{ color: 'var(--gold)', fontFamily: 'var(--font-ui)' }}>
+                      {mode === 'view' ? 'Answer' : 'Question'}
+                    </div>
+                    <p style={{ fontFamily: 'var(--font-content)', fontSize: 14, color: 'var(--text)', lineHeight: 1.6 }}>
+                      {mode === 'view' ? flashcard.answer : flashcard.question}
+                    </p>
                   </div>
-                  <span className="text-xs font-semibold uppercase" style={{ color: cardColor }}>
-                    {isSelected && mode === 'view' ? 'Answer' : 'Question'}
-                  </span>
-                  {mode === 'edit' && (
-                    <button
-                      onClick={e => { e.stopPropagation(); onDeleteFlashcard(flashcard.id); }}
-                      className="ml-auto w-5 h-5 rounded-full bg-red-100 text-red-500 text-xs hover:bg-red-500 hover:text-white transition-colors"
-                    >✕</button>
-                  )}
+                  <div className="flex gap-1 p-2">
+                    <button onClick={() => onSelectFlashcard(null)}
+                      className="flex-1 py-1 rounded text-xs transition-colors"
+                      style={{ background: 'transparent', border: '1px solid var(--border)', color: 'var(--text-dim)', cursor: 'pointer', fontFamily: 'var(--font-ui)' }}>
+                      Close
+                    </button>
+                    {mode === 'edit' && (
+                      <button onClick={() => onDeleteFlashcard(flashcard.id)}
+                        className="py-1 px-2 rounded text-xs transition-colors"
+                        style={{ background: 'transparent', border: '1px solid var(--danger)', color: 'var(--danger)', cursor: 'pointer', fontFamily: 'var(--font-ui)' }}>
+                        Delete
+                      </button>
+                    )}
+                  </div>
                 </div>
-                <p className="text-sm text-gray-800 leading-snug">
-                  {isSelected && mode === 'view' ? flashcard.answer : flashcard.question}
-                </p>
-                {mode === 'view' && (
-                  <p className="text-xs text-gray-400 mt-2 text-center">
-                    {isSelected ? 'Click to see question' : 'Click to reveal answer'}
-                  </p>
-                )}
-              </div>
+              )}
             </div>
           );
         })}
       </div>
 
-      {/* Add flashcard button in edit mode */}
+      {/* Edit mode: Pin Note button */}
       {mode === 'edit' && (
-        <button
-          onClick={handleAddFlashcard}
-          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-30 bg-yellow-500 hover:bg-yellow-400 text-black font-bold py-4 px-6 rounded-full shadow-2xl text-lg transition-all hover:scale-110"
-        >
-          ➕ Add Flashcard Here
+        <button onClick={() => setPinMode(p => !p)}
+          className="absolute z-30 px-4 py-2 rounded text-xs uppercase tracking-widest transition-colors"
+          style={{
+            bottom: 20, left: '50%', transform: 'translateX(-50%)',
+            background: pinMode ? 'var(--gold)' : 'var(--gold-dim)',
+            border: '1px solid var(--gold)',
+            color: pinMode ? 'var(--bg)' : 'var(--gold-bright)',
+            fontFamily: 'var(--font-ui)', cursor: 'pointer',
+          }}>
+          {pinMode ? '✕ Cancel' : '⊕ Pin Note'}
         </button>
       )}
 
-      {/* Crosshair in edit mode */}
-      {mode === 'edit' && (
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none z-20">
-          <div className="w-20 h-20 border-4 border-yellow-400 rounded-full opacity-50" />
-          <div className="absolute top-1/2 left-0 w-full h-1 bg-yellow-400 opacity-50" />
-          <div className="absolute left-1/2 top-0 w-1 h-full bg-yellow-400 opacity-50" />
-        </div>
-      )}
-
-      {/* Mode indicator */}
-      <div className={`absolute top-4 left-1/2 -translate-x-1/2 px-4 py-2 rounded-full font-medium shadow-lg z-30 pointer-events-none ${
-        mode === 'edit' ? 'bg-yellow-500 text-black' : 'bg-blue-600 text-white'
-      }`}>
-        {mode === 'edit'
-          ? '📝 Look at the spot, then click ➕ to place a card'
-          : '👁️ Walk around • Click cards to flip'}
-      </div>
-
-      {/* Orientation readout */}
-      <div className="absolute top-4 right-4 bg-black/70 text-white px-3 py-2 rounded-lg text-xs font-mono z-30 pointer-events-none">
-        <div>H: {orientation.heading.toFixed(1)}°</div>
-        <div>P: {orientation.pitch.toFixed(1)}°</div>
-        <div>Z: {orientation.zoom.toFixed(2)}</div>
-      </div>
-
-      {/* Current room + card count */}
-      <div className="absolute bottom-4 left-4 bg-black/70 text-white px-3 py-2 rounded-lg text-sm z-30 pointer-events-none">
-        {currentRoom && <div className="font-medium">📍 {currentRoom}</div>}
-        <div className="text-xs text-gray-400 mt-0.5">🃏 {tour.flashcards.length} card{tour.flashcards.length !== 1 ? 's' : ''}</div>
-      </div>
-
-      {/* Tour label */}
-      <div className="absolute bottom-4 right-4 bg-emerald-600 text-white px-3 py-2 rounded-lg text-sm font-medium z-30 pointer-events-none">
-        🌐 {tour.name}
+      {/* HUD: room name + orientation */}
+      <div className="absolute top-3 right-3 z-30 pointer-events-none text-right"
+        style={{ fontFamily: 'var(--font-ui)', fontSize: 10, color: 'var(--text-dim)', lineHeight: 1.8 }}>
+        {currentRoom && <div style={{ color: 'var(--text)' }}>{currentRoom}</div>}
+        <div>{orientation.heading.toFixed(1)}° · {orientation.pitch.toFixed(1)}°</div>
       </div>
     </div>
   );
