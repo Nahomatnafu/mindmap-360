@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { Tour, AppMode, Position, Flashcard } from '@/types';
+import { Tour, AppMode, Position } from '@/types';
 
 declare global {
   interface Window {
@@ -31,7 +31,7 @@ interface MpSdk {
       subscribe: (callback: (pose: CameraPose) => void) => { cancel: () => void };
     };
   };
-  on: (event: string, callback: (...args: any[]) => void) => void;
+  on: (event: string, callback: (...args: unknown[]) => void) => void;
 }
 
 interface MattertagDescriptor {
@@ -71,30 +71,25 @@ interface MatterportViewerProps {
 export function MatterportViewer({
   tour,
   mode,
-  selectedFlashcardId,
-  onSelectFlashcard,
   onAddFlashcard,
 }: MatterportViewerProps) {
+  const sdkKey = process.env.NEXT_PUBLIC_MATTERPORT_SDK_KEY;
+  const modelId = process.env.NEXT_PUBLIC_MATTERPORT_MODEL_ID;
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [sdk, setSdk] = useState<MpSdk | null>(null);
   const [isConnected, setIsConnected] = useState(false);
-  const [sdkLoaded, setSdkLoaded] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [sdkLoaded, setSdkLoaded] = useState(() => typeof window !== 'undefined' && Boolean(window.MP_SDK));
+  const [error, setError] = useState<string | null>(() => sdkKey ? null : 'Missing SDK key. Check .env.local');
   const [lastClick, setLastClick] = useState<{ x: number; y: number; z: number } | null>(null);
-
-  const sdkKey = process.env.NEXT_PUBLIC_MATTERPORT_SDK_KEY;
-  const modelId = process.env.NEXT_PUBLIC_MATTERPORT_MODEL_ID;
 
   // Load Matterport SDK script
   useEffect(() => {
     if (!sdkKey) {
-      setError('Missing SDK key. Check .env.local');
       return;
     }
 
     // Check if already loaded
     if (window.MP_SDK) {
-      setSdkLoaded(true);
       return;
     }
 

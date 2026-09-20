@@ -1,11 +1,10 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { Flashcard, Position } from '@/types';
+import React, { useState } from 'react';
+import { Flashcard } from '@/types';
 
 interface FlashcardEditorProps {
   flashcard?: Flashcard;
-  position?: Position;
   isOpen: boolean;
   onClose: () => void;
   onSave: (data: { question: string; answer: string; color?: string }) => void;
@@ -20,22 +19,15 @@ const COLORS = [
   { name: 'Cyan', value: '#06b6d4' },
 ];
 
-export function FlashcardEditor({ flashcard, position, isOpen, onClose, onSave }: FlashcardEditorProps) {
-  const [question, setQuestion] = useState('');
-  const [answer, setAnswer] = useState('');
-  const [color, setColor] = useState(COLORS[0].value);
+export function FlashcardEditor({ flashcard, isOpen, onClose, onSave }: FlashcardEditorProps) {
+  if (!isOpen) return null;
+  return <FlashcardEditorForm key={flashcard?.id ?? 'new-memory'} flashcard={flashcard} onClose={onClose} onSave={onSave} />;
+}
 
-  useEffect(() => {
-    if (flashcard) {
-      setQuestion(flashcard.question);
-      setAnswer(flashcard.answer);
-      setColor(flashcard.color || COLORS[0].value);
-    } else {
-      setQuestion('');
-      setAnswer('');
-      setColor(COLORS[0].value);
-    }
-  }, [flashcard, isOpen]);
+function FlashcardEditorForm({ flashcard, onClose, onSave }: Omit<FlashcardEditorProps, 'isOpen'>) {
+  const [question, setQuestion] = useState(flashcard?.question ?? '');
+  const [answer, setAnswer] = useState(flashcard?.answer ?? '');
+  const [color, setColor] = useState(flashcard?.color || COLORS[0].value);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -43,8 +35,6 @@ export function FlashcardEditor({ flashcard, position, isOpen, onClose, onSave }
     onSave({ question: question.trim(), answer: answer.trim(), color });
     onClose();
   };
-
-  if (!isOpen) return null;
 
   const inputStyle: React.CSSProperties = {
     width: '100%', padding: '8px 12px', borderRadius: 4,

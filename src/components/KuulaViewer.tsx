@@ -12,11 +12,23 @@ interface KuulaViewerProps {
   onDeleteFlashcard: (id: string) => void;
 }
 
+interface KuulaEvent {
+  frame: string;
+  data: {
+    posts?: unknown;
+    title?: string;
+    name?: string;
+    heading?: number;
+    pitch?: number;
+    zoom?: number;
+  };
+}
+
 declare global {
   interface Window {
     KuulaPlayerAPI: {
-      addEventListener: (event: string, callback: (e: any) => void) => void;
-      removeEventListener: (event: string, callback: (e: any) => void) => void;
+      addEventListener: (event: string, callback: (event: KuulaEvent) => void) => void;
+      removeEventListener: (event: string, callback: (event: KuulaEvent) => void) => void;
       load: (frameId: string, postId: string) => void;
       setHeading: (frameId: string, value: number) => void;
       setPitch: (frameId: string, value: number) => void;
@@ -105,29 +117,34 @@ export function KuulaViewer({
   onDeleteFlashcard,
 }: KuulaViewerProps) {
   const wrapRef   = useRef<HTMLDivElement>(null);
-  const [frameId, setFrameId]       = useState<string | null>(null);
   const [currentRoom, setCurrentRoom] = useState<string>('');
   const [orientation, setOrientation] = useState({ heading: 0, pitch: 0, zoom: 0 });
-  const [isApiReady, setIsApiReady]  = useState(false);
+  const [viewport, setViewport] = useState({ width: 0, height: 0 });
+  const [isApiReady, setIsApiReady] = useState(() => typeof window !== 'undefined' && Boolean(window.KuulaPlayerAPI));
   const [pinMode, setPinMode]        = useState(false);
   const orientationRef = useRef(orientation);
-  const modeRef        = useRef(mode);
 
   useEffect(() => { orientationRef.current = orientation; }, [orientation]);
-  useEffect(() => { modeRef.current = mode; }, [mode]);
+
+  useEffect(() => {
+    const element = wrapRef.current;
+    if (!element) return;
+    const observer = new ResizeObserver(([entry]) => {
+      setViewport({ width: entry.contentRect.width, height: entry.contentRect.height });
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
 
   // Load Kuula API script
   useEffect(() => {
     if (document.querySelector('script[src*="kuula.io/api.js"]')) {
-      if (window.KuulaPlayerAPI) setIsApiReady(true);
-      else {
-        // Script tag exists but may not have fired onload yet — poll briefly
-        const interval = setInterval(() => {
-          if (window.KuulaPlayerAPI) { setIsApiReady(true); clearInterval(interval); }
-        }, 100);
-        return () => clearInterval(interval);
-      }
-      return;
+      if (window.KuulaPlayerAPI) return;
+      // Script tag exists but may not have fired onload yet — poll briefly.
+      const interval = setInterval(() => {
+        if (window.KuulaPlayerAPI) { setIsApiReady(true); clearInterval(interval); }
+      }, 100);
+      return () => clearInterval(interval);
     }
 
     const script = document.createElement('script');
@@ -142,20 +159,19 @@ export function KuulaViewer({
     if (!isApiReady || !window.KuulaPlayerAPI) return;
 
     // Frame loaded — save frame ID and log available posts/rooms
-    const handleFrameLoaded = (e: any) => {
+    const handleFrameLoaded = (e: KuulaEvent) => {
       console.log('✅ Kuula frame loaded, ID:', e.frame);
       console.log('📋 Posts in tour:', e.data.posts);
-      setFrameId(e.frame);
     };
 
     // A new room/post was navigated to
-    const handlePostLoaded = (e: any) => {
+    const handlePostLoaded = (e: KuulaEvent) => {
       console.log('🚶 Room loaded:', e.data.title, e.data);
       setCurrentRoom(e.data.title || '');
     };
 
     // A Kuula hotspot was clicked — look up flashcard by hotspot name
-    const handleHotspot = (e: any) => {
+    const handleHotspot = (e: KuulaEvent) => {
       const hotspotName: string = e.data.name || '';
       console.log('🎯 Kuula hotspot clicked:', hotspotName, e.data);
 
@@ -175,11 +191,11 @@ export function KuulaViewer({
     };
 
     // Orientation fires every ~100ms — use for overlay positioning
-    const handleOrientation = (e: any) => {
+    const handleOrientation = (e: KuulaEvent) => {
       setOrientation({
-        heading: e.data.heading,
-        pitch: e.data.pitch,
-        zoom: e.data.zoom,
+        heading: e.data.heading ?? 0,
+        pitch: e.data.pitch ?? 0,
+        zoom: e.data.zoom ?? 0,
       });
     };
 
@@ -211,10 +227,15 @@ export function KuulaViewer({
 
   // Project each flashcard's anchor to screen pixel coords
   const getMarkerPos = useCallback((flashcard: Flashcard) => {
-    if (!wrapRef.current) return null;
-    const { offsetWidth: W, offsetHeight: H } = wrapRef.current;
-    return projectToScreen(flashcard.position.heading, flashcard.position.pitch, orientation, W, H);
-  }, [orientation]);
+    if (!viewport.width || !viewport.height) return null;
+    return projectToScreen(
+      flashcard.position.heading,
+      flashcard.position.pitch,
+      orientation,
+      viewport.width,
+      viewport.height,
+    );
+  }, [orientation, viewport]);
 
   const embedUrl = tour.embedUrl;
 
