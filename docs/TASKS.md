@@ -4,8 +4,8 @@ Updated September 20, 2026.
 
 | Status | Branch | Owner | Scope | Depends on | Completion evidence |
 |---|---|---|---|---|---|
-| In progress | `codex/foundation-baseline` | Codex | Repository setup, patched dependencies, reproducible baseline, coordination docs, viewer decision | None | Build/audit/lint results recorded; branch committed |
-| Planned | `codex/local-model-storage` | Unassigned | Engine-independent model, validation, Dexie repository, migration, visible save state | Foundation/viewer decision | Transaction and migration tests; reload verification |
+| Complete | `codex/foundation-baseline` | Codex | Repository setup, patched dependencies, reproducible baseline, coordination docs, viewer decision | None | Build/typecheck pass; clean audit; baseline lint debt recorded; browser smoke check |
+| In progress | `codex/local-model-storage` | Codex | Engine-independent model, validation, Dexie repository, repeatable legacy migration | Foundation/viewer decision | Core transaction, validation, conflict, and migration tests pass; UI integration continues on authoring branch |
 | Planned | `codex/backup-import` | Unassigned | Versioned ZIP export/import and validation | Local model/storage | Fresh-browser round trip and invalid-archive test |
 | Planned | `codex/photo-authoring` | Unassigned | Photo import, scene ownership, placement, movement links, memory markers | Local model/storage and viewer adapter | Three-scene authoring flow verified |
 | Planned | `codex/practice-routes` | Unassigned | Ordered routes, guided practice, session results, retry missed | Stable model and viewer adapter | Five-stop practice flow verified |
