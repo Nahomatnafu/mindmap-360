@@ -8,6 +8,7 @@ import { KuulaViewer } from './KuulaViewer';
 interface TourViewerProps {
   tour: Tour;
   mode: AppMode;
+  placingNote?: boolean;
   selectedFlashcardId: string | null;
   onSelectFlashcard: (id: string | null) => void;
   onAddFlashcard: (position: Position) => void;
@@ -18,6 +19,7 @@ interface TourViewerProps {
 export function TourViewer({
   tour,
   mode,
+  placingNote,
   selectedFlashcardId,
   onSelectFlashcard,
   onAddFlashcard,
@@ -40,6 +42,7 @@ export function TourViewer({
     <PannellumViewer
       tour={tour}
       mode={mode}
+      placingNote={placingNote}
       selectedFlashcardId={selectedFlashcardId}
       onSelectFlashcard={onSelectFlashcard}
       onAddFlashcard={onAddFlashcard}
