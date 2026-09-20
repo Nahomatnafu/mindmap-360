@@ -21,6 +21,8 @@ export interface TourScene {
   id: string;
   name: string;
   image: string;
+  thumbnail?: string;
+  alternate?: boolean;
   sortOrder: number;
   initialYaw: number;
   initialPitch: number;
@@ -33,6 +35,8 @@ export interface NavHotspot {
   toScene: string;
   position: Position;
   label?: string;
+  surface?: 'floor' | 'wall';
+  preserveView?: boolean;
 }
 
 export interface Tour {

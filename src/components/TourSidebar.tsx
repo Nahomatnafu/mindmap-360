@@ -19,7 +19,7 @@ export function TourSidebar({
   mode, onModeChange,
   selectedFlashcardId, onSelectFlashcard,
 }: TourSidebarProps) {
-  const { createTourFromFiles, renameScenes } = useTourContext();
+  const { createTourFromFiles, renameScenes, prepareTour, preparation } = useTourContext();
   const selectedTour = tours.find(t => t.id === selectedTourId);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isImporting, setIsImporting] = useState(false);
@@ -125,6 +125,11 @@ export function TourSidebar({
             Manage {selectedTour.scenes.length} scenes
           </button>
         )}
+        {selectedTour && <div className="mt-4 space-y-2 text-xs">
+          <button disabled={Boolean(preparation)} onClick={() => void prepareTour(selectedTour.id).catch(() => {})} className="w-full rounded-lg border px-3 py-3 text-left" style={{ borderColor: 'var(--border)', color: 'var(--text)' }}> {preparation || 'Create fast previews'} </button>
+          {selectedTour.name === 'OpenView Homes' && <button disabled={Boolean(preparation)} onClick={() => void prepareTour(selectedTour.id, true).catch(() => {})} className="w-full rounded-lg border px-3 py-3 text-left" style={{ borderColor: 'var(--gold-dim)', color: 'var(--gold)' }}>Apply reviewed OpenView layout</button>}
+          <p style={{ color: 'var(--text-dim)', lineHeight: 1.6 }}>Photos and notes are saved on this device.</p>
+        </div>}
       </div>
       {selectedTour && selectedTour.flashcards.length > 0 && (
         <div className="overflow-y-auto px-4 py-3" style={{ borderTop: '1px solid var(--border)', maxHeight: 240 }}>

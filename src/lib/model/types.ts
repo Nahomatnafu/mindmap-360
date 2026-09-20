@@ -23,6 +23,7 @@ export interface Scene {
   title: string;
   panoramaAssetId: Id;
   thumbnailAssetId?: Id;
+  alternate?: boolean;
   sortOrder: number;
   initialYaw: number;
   initialPitch: number;
@@ -37,6 +38,7 @@ export interface HotspotAppearance {
   customAssetId?: Id;
   color: string;
   size: number;
+  surface?: 'floor' | 'wall';
 }
 
 interface HotspotBase extends HotspotAppearance {
@@ -52,6 +54,7 @@ export interface MoveHotspot extends HotspotBase {
   targetYaw?: number;
   targetPitch?: number;
   targetHfov?: number;
+  preserveView?: boolean;
 }
 
 export interface MemoryHotspot extends HotspotBase {

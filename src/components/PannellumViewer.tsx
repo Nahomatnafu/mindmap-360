@@ -1,355 +1,197 @@
 'use client';
 
-import React, { useEffect, useRef, useState } from 'react';
-import type { AppMode, Position, Tour } from '@/types';
+import { useEffect, useRef, useState } from 'react';
+import type { AppMode, Position, Tour, NavHotspot } from '@/types';
+import { useTourContext } from '@/context/TourContext';
+import { ConnectionEditor } from './ConnectionEditor';
+import './panorama.css';
 
-interface PannellumHotspot {
-  id: string;
-  pitch: number;
-  yaw: number;
-  type: 'info' | 'scene';
-  text: string;
-  sceneId?: string;
-  cssClass?: string;
-  clickHandlerFunc?: () => void;
-  createTooltipFunc?: (element: HTMLElement, args: { label: string; detail?: string }) => void;
-  createTooltipArgs?: { label: string; detail?: string };
+interface Engine {
+  destroy(): void;
+  getPitch(): number;
+  getYaw(): number;
+  getHfov(): number;
+  getScene(): string;
+  setHfov(value: number, duration?: number): void;
+  lookAt(pitch: number, yaw: number, hfov?: number, duration?: number): void;
+  stopMovement(): void;
+  toggleFullscreen(): void;
+  loadScene(id: string, pitch?: number, yaw?: number, hfov?: number): void;
+  mouseEventToCoords(event: { clientX: number; clientY: number }): [number, number];
+  addHotSpot(config: Record<string, unknown>, sceneId: string): void;
+  removeHotSpot(id: string, sceneId: string): void;
+  on(event: string, callback: (...args: unknown[]) => void): void;
+}
+declare global { interface Window { pannellum?: { viewer(element: HTMLElement, config: Record<string, unknown>): Engine } } }
+
+let enginePromise: Promise<void> | undefined;
+function loadEngine() {
+  if (window.pannellum) return Promise.resolve();
+  if (!enginePromise) enginePromise = new Promise<void>((resolve, reject) => {
+    const css = document.createElement('link');
+    css.rel = 'stylesheet'; css.href = '/vendor/pannellum/pannellum.css'; document.head.append(css);
+    const script = document.createElement('script'); script.src = '/vendor/pannellum/pannellum.js';
+    script.onload = () => resolve();
+    script.onerror = () => { enginePromise = undefined; reject(new Error('Could not load the panorama viewer. Reload to retry.')); };
+    document.head.append(script);
+  });
+  return enginePromise;
 }
 
-interface PannellumInstance {
-  destroy: () => void;
-  getPitch: () => number;
-  getYaw: () => number;
-  loadScene: (sceneId: string) => void;
-  mouseEventToCoords: (event: MouseEvent) => [number, number];
-  on: (event: string, callback: (...args: unknown[]) => void) => void;
-}
-
-interface PannellumLibrary {
-  viewer: (element: HTMLElement, configuration: Record<string, unknown>) => PannellumInstance;
-}
-
-declare global {
-  interface Window {
-    pannellum?: PannellumLibrary;
-  }
-}
-
-interface PannellumViewerProps {
+interface Props {
   tour: Tour;
   mode: AppMode;
+  placingNote?: boolean;
   selectedFlashcardId: string | null;
-  onSelectFlashcard: (id: string | null) => void;
-  onAddFlashcard: (position: Position) => void;
+  onSelectFlashcard(id: string | null): void;
+  onAddFlashcard(position: Position): void;
 }
 
-const createHotspotTooltip = (element: HTMLElement, args: { label: string; detail?: string }) => {
-  const tooltip = document.createElement('span');
-  tooltip.className = 'loci-hotspot-tooltip';
-  const title = document.createElement('strong');
-  title.textContent = args.label;
-  tooltip.appendChild(title);
-  if (args.detail) {
-    const detail = document.createElement('small');
-    detail.textContent = args.detail;
-    tooltip.appendChild(detail);
-  }
-  element.appendChild(tooltip);
-};
+export function PannellumViewer(props: Props) {
+  const { tour, mode, placingNote = false, selectedFlashcardId } = props;
+  const { updateConnection, setMode } = useTourContext();
+  const element = useRef<HTMLDivElement>(null);
+  const engine = useRef<Engine | null>(null);
+  const callbacks = useRef(props);
+  const [ready, setReady] = useState(0);
+  const [sceneId, setSceneId] = useState(tour.scenes[0]?.id ?? '');
+  const [loading, setLoading] = useState(true);
+  const [failure, setFailure] = useState('');
+  const [tray, setTray] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const editingConnections = editing && mode === 'edit' && !placingNote;
+  const [draft, setDraft] = useState<NavHotspot | null>(null);
+  const rendered = useRef<{ id: string; scene: string }[]>([]);
+  const camera = useRef<{ scene: string; yaw: number; pitch: number; hfov: number } | null>(null);
+  useEffect(() => { callbacks.current = props; }, [props]);
 
-export function PannellumViewer({
-  tour,
-  mode,
-  selectedFlashcardId,
-  onSelectFlashcard,
-  onAddFlashcard,
-}: PannellumViewerProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const viewerRef = useRef<PannellumInstance | null>(null);
-  const [isReady, setIsReady] = useState(() => typeof window !== 'undefined' && Boolean(window.pannellum));
-  const [currentPos, setCurrentPos] = useState({ yaw: 0, pitch: 0 });
-  const [currentScene, setCurrentScene] = useState(() => tour.scenes[0]?.id ?? '');
-  const [sceneTrayOpen, setSceneTrayOpen] = useState(false);
-  const currentSceneRef = useRef(currentScene);
-  const modeRef = useRef(mode);
-  const addFlashcardRef = useRef(onAddFlashcard);
-
-  useEffect(() => { modeRef.current = mode; }, [mode]);
-  useEffect(() => { addFlashcardRef.current = onAddFlashcard; }, [onAddFlashcard]);
-
+  // Notes, mode switches, and marker edits never recreate WebGL or reset the camera.
+  const sceneSources = JSON.stringify(tour.scenes.map(s => ({ id: s.id, image: s.image, thumbnail: s.thumbnail, initialYaw: s.initialYaw, initialPitch: s.initialPitch, initialHfov: s.initialHfov })));
   useEffect(() => {
-    if (!document.querySelector('link[href*="pannellum"]')) {
-      const link = document.createElement('link');
-      link.rel = 'stylesheet';
-      link.href = 'https://cdn.jsdelivr.net/npm/pannellum@2.5.7/build/pannellum.css';
-      document.head.appendChild(link);
-    }
-    if (window.pannellum) return;
-    const existing = document.querySelector<HTMLScriptElement>('script[src*="pannellum"]');
-    if (existing) {
-      existing.addEventListener('load', () => setIsReady(true), { once: true });
-      return;
-    }
-    const script = document.createElement('script');
-    script.src = 'https://cdn.jsdelivr.net/npm/pannellum@2.5.7/build/pannellum.js';
-    script.async = true;
-    script.onload = () => setIsReady(true);
-    document.body.appendChild(script);
-  }, []);
-
-  useEffect(() => {
-    if (!isReady || !containerRef.current || !window.pannellum || !tour.scenes.length) return;
-    viewerRef.current?.destroy();
-
-    const scenes = Object.fromEntries(tour.scenes.map((scene) => {
-      const memoryHotspots: PannellumHotspot[] = tour.flashcards
-        .filter((flashcard) => flashcard.position.sceneId === scene.id)
-        .map((flashcard) => ({
-          id: flashcard.id,
-          pitch: flashcard.position.pitch,
-          yaw: flashcard.position.heading,
-          type: 'info',
-          text: flashcard.id === selectedFlashcardId && mode === 'view' ? flashcard.answer : flashcard.question,
-          cssClass: `memory-hotspot${flashcard.id === selectedFlashcardId ? ' selected' : ''}`,
-          clickHandlerFunc: () => onSelectFlashcard(flashcard.id),
-          createTooltipFunc: createHotspotTooltip,
-          createTooltipArgs: {
-            label: flashcard.question,
-            detail: flashcard.id === selectedFlashcardId && mode === 'view' ? flashcard.answer : 'Open memory',
-          },
-        }));
-      const movementHotspots: PannellumHotspot[] = tour.navHotspots
-        .filter((hotspot) => hotspot.fromScene === scene.id)
-        .map((hotspot) => ({
-          id: hotspot.id,
-          pitch: hotspot.position.pitch,
-          yaw: hotspot.position.heading,
-          type: 'scene',
-          sceneId: hotspot.toScene,
-          text: hotspot.label || 'Walk',
-          cssClass: 'walk-hotspot',
-          createTooltipFunc: createHotspotTooltip,
-          createTooltipArgs: { label: hotspot.label || 'Continue', detail: 'Walk to next scene' },
-        }));
-      return [scene.id, {
-        type: 'equirectangular',
-        panorama: scene.image,
-        yaw: scene.initialYaw,
-        pitch: scene.initialPitch,
-        hfov: scene.initialHfov,
-        hotSpots: [...memoryHotspots, ...movementHotspots],
-      }];
-    }));
-    const firstScene = tour.scenes.some((scene) => scene.id === currentSceneRef.current)
-      ? currentSceneRef.current
-      : tour.scenes[0].id;
-
-    const viewer = window.pannellum.viewer(containerRef.current, {
-      default: {
-        firstScene,
-        autoLoad: true,
-        showControls: true,
-        mouseZoom: true,
-        keyboardZoom: true,
-        draggable: true,
-        friction: 0.15,
-        hfov: 100,
-        minHfov: 50,
-        maxHfov: 120,
-        compass: false,
-        sceneFadeDuration: 600,
-        hotSpotDebug: false,
-      },
-      scenes,
-    });
-    viewerRef.current = viewer;
-
-    viewer.on('scenechange', (...args: unknown[]) => {
-      const sceneId = String(args[0]);
-      currentSceneRef.current = sceneId;
-      setCurrentScene(sceneId);
-    });
-    viewer.on('mousedown', (...args: unknown[]) => {
-      const event = args[0] as MouseEvent;
-      if (modeRef.current !== 'edit') return;
-      if ((event.target as Element | null)?.closest('.pnlm-hotspot-base')) return;
-      const startX = event.clientX;
-      const startY = event.clientY;
-      const handleMouseUp = (upEvent: MouseEvent) => {
-        const moved = Math.abs(upEvent.clientX - startX) >= 5 || Math.abs(upEvent.clientY - startY) >= 5;
-        if (!moved) {
-          const [pitch, heading] = viewer.mouseEventToCoords(upEvent);
-          addFlashcardRef.current({ heading, pitch, sceneId: currentSceneRef.current || firstScene });
-        }
-        document.removeEventListener('mouseup', handleMouseUp);
-      };
-      document.addEventListener('mouseup', handleMouseUp);
-    });
-
-    const updatePosition = () => setCurrentPos({ yaw: viewer.getYaw(), pitch: viewer.getPitch() });
-    viewer.on('mouseup', updatePosition);
-    viewer.on('touchend', updatePosition);
-    const interval = window.setInterval(updatePosition, 150);
-
-    return () => {
-      window.clearInterval(interval);
-      viewer.destroy();
-      if (viewerRef.current === viewer) viewerRef.current = null;
+    let cancelled = false;
+    let viewer: Engine | null = null;
+    const root = element.current;
+    if (!root) return;
+    let start: { x: number; y: number; id: number } | null = null;
+    const pointerDown = (event: PointerEvent) => {
+      if ((event.target as Element).closest('.loci-anchor, .pnlm-controls')) return;
+      if (!event.isPrimary || event.button !== 0) return;
+      start = { x: event.clientX, y: event.clientY, id: event.pointerId };
     };
-  }, [isReady, mode, onSelectFlashcard, selectedFlashcardId, tour]);
+    const pointerUp = (event: PointerEvent) => {
+      const origin = start; start = null;
+      if (!origin || event.pointerId !== origin.id || Math.hypot(event.clientX - origin.x, event.clientY - origin.y) > 6) return;
+      if (!callbacks.current.placingNote || !viewer) return;
+      const [pitch, heading] = viewer.mouseEventToCoords(event);
+      callbacks.current.onAddFlashcard({ pitch, heading, sceneId: viewer.getScene() });
+    };
+    const pointerCancel = () => { start = null; };
+    void loadEngine().then(() => {
+      if (cancelled || !window.pannellum) return;
+      const scenes: Tour['scenes'] = JSON.parse(sceneSources);
+      const remembered = camera.current;
+      const first = scenes.some(s => s.id === remembered?.scene) ? remembered!.scene : scenes[0].id;
+      viewer = window.pannellum.viewer(root, {
+        default: { firstScene: first, autoLoad: true, showControls: false, compass: false, ignoreGPanoXMP: true, minHfov: 45, maxHfov: 115, sceneFadeDuration: matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 450 },
+        scenes: Object.fromEntries(scenes.map(s => [s.id, { type: 'equirectangular', panorama: s.image, preview: s.thumbnail, yaw: remembered?.scene === s.id ? remembered.yaw : s.initialYaw, pitch: remembered?.scene === s.id ? remembered.pitch : s.initialPitch, hfov: remembered?.scene === s.id ? remembered.hfov : s.initialHfov, hotSpots: [] }])),
+      });
+      engine.current = viewer;
+      rendered.current = [];
+      setSceneId(first); setLoading(true); setFailure(''); setReady(value => value + 1);
+      viewer.on('scenechange', (...args) => { setSceneId(String(args[0])); setLoading(true); setFailure(''); });
+      viewer.on('load', () => setLoading(false));
+      viewer.on('error', (...args) => { setLoading(false); setFailure(String(args[0] ?? 'Panorama could not load.')); });
+      root.addEventListener('pointerdown', pointerDown);
+      root.addEventListener('pointerup', pointerUp);
+      root.addEventListener('pointercancel', pointerCancel);
+    }).catch(error => { if (!cancelled) { setFailure(String(error)); setLoading(false); } });
+    return () => {
+      cancelled = true;
+      if (viewer) { camera.current = { scene: viewer.getScene(), yaw: viewer.getYaw(), pitch: viewer.getPitch(), hfov: viewer.getHfov() }; viewer.destroy(); }
+      engine.current = null;
+      root.removeEventListener('pointerdown', pointerDown); root.removeEventListener('pointerup', pointerUp); root.removeEventListener('pointercancel', pointerCancel);
+    };
+  }, [sceneSources]);
 
-  if (!tour.scenes.length) {
-    return <div className="h-full flex items-center justify-center" style={{ color: 'var(--text-dim)' }}>No scenes yet.</div>;
+  useEffect(() => {
+    const viewer = engine.current;
+    if (!viewer || !ready) return;
+    for (const old of rendered.current) viewer.removeHotSpot(old.id, old.scene);
+    rendered.current = [];
+    function marker(id: string, scene: string, yaw: number, pitch: number, label: string, kind: string, color: string, action: () => void) {
+      viewer!.addHotSpot({ id, yaw, pitch, cssClass: 'loci-anchor', createTooltipFunc: (anchor: HTMLElement) => {
+        const button = document.createElement('button'); button.type = 'button'; button.className = `loci-marker ${kind}`;
+        button.setAttribute('aria-label', label); button.title = label; button.style.setProperty('--marker-color', color);
+        const ring = document.createElement('span'); ring.className = 'loci-ring'; ring.setAttribute('aria-hidden', 'true');
+        const caption = document.createElement('span'); caption.className = 'loci-caption'; caption.textContent = label;
+        button.append(ring, caption);
+        for (const event of ['pointerdown', 'mousedown', 'touchstart', 'dblclick']) button.addEventListener(event, e => e.stopPropagation());
+        button.addEventListener('click', event => { event.stopPropagation(); action(); });
+        anchor.append(button);
+      } }, scene);
+      rendered.current.push({ id, scene });
+    }
+    for (const original of tour.navHotspots) {
+      const link = draft?.id === original.id ? draft : original;
+      marker(link.id, link.fromScene, link.position.heading, link.position.pitch, link.label || 'Walk here', link.surface === 'wall' ? 'wall' : 'floor', '#ffffff', () => {
+        if (editingConnections) { setDraft(link); return; }
+        callbacks.current.onSelectFlashcard(null);
+        viewer.stopMovement();
+        const target = tour.scenes.find(s => s.id === link.toScene);
+        if (link.preserveView) viewer.loadScene(link.toScene, viewer.getPitch(), viewer.getYaw(), viewer.getHfov());
+        else viewer.loadScene(link.toScene, target?.initialPitch, target?.initialYaw, target?.initialHfov);
+      });
+    }
+    for (const note of tour.flashcards) if (note.position.sceneId) {
+      marker(note.id, note.position.sceneId, note.position.heading, note.position.pitch, note.question, `note ${selectedFlashcardId === note.id ? 'selected' : ''}`, note.color || '#c9a84c', () => callbacks.current.onSelectFlashcard(note.id));
+    }
+  }, [ready, tour, draft, editingConnections, selectedFlashcardId]);
+
+  useEffect(() => {
+    const viewer = engine.current;
+    const note = tour.flashcards.find(item => item.id === selectedFlashcardId);
+    if (viewer && ready && note?.position.sceneId && viewer.getScene() !== note.position.sceneId) {
+      viewer.stopMovement();
+      viewer.loadScene(note.position.sceneId, note.position.pitch, note.position.heading, 95);
+    }
+  }, [ready, selectedFlashcardId, tour.flashcards]);
+
+  const scene = tour.scenes.find(s => s.id === sceneId) ?? tour.scenes[0];
+  const mainScenes = tour.scenes.filter(s => !s.alternate);
+  const mainSceneId = scene?.alternate ? tour.navHotspots.find(h => h.fromScene === sceneId && h.preserveView)?.toScene : sceneId;
+  const mainIndex = Math.max(0, mainScenes.findIndex(s => s.id === mainSceneId));
+  function navigate(id: string) {
+    if (loading) return;
+    const target = tour.scenes.find(s => s.id === id);
+    callbacks.current.onSelectFlashcard(null);
+    engine.current?.stopMovement(); engine.current?.loadScene(id, target?.initialPitch, target?.initialYaw, target?.initialHfov);
+    setTray(false); setDraft(null);
   }
-
-  const currentSceneIndex = Math.max(0, tour.scenes.findIndex((scene) => scene.id === currentScene));
-  const loadSceneAt = (index: number) => {
-    const scene = tour.scenes[index];
-    if (!scene) return;
-    viewerRef.current?.loadScene(scene.id);
-    setSceneTrayOpen(false);
-  };
-
-  return (
-    <div className="relative w-full h-full" style={{ background: 'var(--bg)' }}>
-      <div ref={containerRef} className="w-full h-full" />
-
-      {mode === 'edit' && (
-        <div className="absolute inset-0 pointer-events-none z-10" style={{ cursor: 'crosshair' }}>
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
-            <div className="w-6 h-6 rounded-full opacity-70" style={{ border: '2px solid var(--gold)' }} />
-          </div>
-        </div>
-      )}
-
-      <div className="absolute top-4 left-1/2 -translate-x-1/2 px-4 py-2 rounded-full text-xs z-30 pointer-events-none backdrop-blur-md"
-        style={{ background: mode === 'edit' ? 'var(--gold)' : 'rgba(8,8,16,0.58)', color: mode === 'edit' ? 'var(--bg)' : 'var(--text)', border: '1px solid rgba(255,255,255,0.12)' }}>
-        {mode === 'edit' ? 'Click a surface to place a memory' : 'Drag to look around · select a portal to move'}
-      </div>
-
-      {mode === 'edit' && (
-        <div className="absolute top-4 right-4 px-3 py-2 rounded-lg text-[10px] z-30 backdrop-blur-md"
-          style={{ background: 'rgba(8,8,16,0.62)', color: 'var(--text-dim)', fontFamily: 'var(--font-ui)', border: '1px solid rgba(255,255,255,0.1)' }}>
-          {currentPos.yaw.toFixed(1)}° / {currentPos.pitch.toFixed(1)}°
-        </div>
-      )}
-
-      <div className="absolute bottom-5 left-1/2 z-30 -translate-x-1/2">
-        {sceneTrayOpen && (
-          <div className="absolute bottom-[calc(100%+10px)] left-1/2 grid max-h-56 w-72 -translate-x-1/2 grid-cols-2 gap-1 overflow-y-auto rounded-2xl p-2 shadow-2xl backdrop-blur-xl"
-            style={{ background: 'rgba(8,8,16,0.9)', border: '1px solid rgba(255,255,255,0.12)' }}>
-            {tour.scenes.map((scene, index) => (
-              <button key={scene.id} onClick={() => loadSceneAt(index)} className="rounded-xl px-3 py-2 text-left transition-colors"
-                style={{ background: index === currentSceneIndex ? 'rgba(201,168,76,0.18)' : 'transparent', color: index === currentSceneIndex ? 'var(--gold-bright)' : 'var(--text)' }}>
-                <span className="mr-2 text-[10px]" style={{ color: 'var(--text-dim)' }}>{String(index + 1).padStart(2, '0')}</span>
-                <span className="text-xs">{scene.name}</span>
-              </button>
-            ))}
-          </div>
-        )}
-        <div className="flex items-center gap-1 rounded-2xl p-1.5 shadow-2xl backdrop-blur-xl"
-          style={{ background: 'rgba(8,8,16,0.78)', border: '1px solid rgba(255,255,255,0.14)' }}>
-          <button onClick={() => loadSceneAt(currentSceneIndex - 1)} disabled={currentSceneIndex === 0}
-            className="flex h-10 w-10 items-center justify-center rounded-xl text-xl transition-colors disabled:opacity-25"
-            style={{ color: 'var(--text)' }} aria-label="Previous scene">‹</button>
-          <button onClick={() => setSceneTrayOpen(open => !open)} className="min-w-44 rounded-xl px-4 py-2 text-left transition-colors"
-            style={{ color: 'var(--text)' }} aria-expanded={sceneTrayOpen}>
-            <span className="block text-[9px] uppercase tracking-[0.18em]" style={{ color: 'var(--gold)' }}>
-              Scene {currentSceneIndex + 1} of {tour.scenes.length}
-            </span>
-            <span className="block truncate text-sm">{tour.scenes[currentSceneIndex]?.name}</span>
-          </button>
-          <button onClick={() => loadSceneAt(currentSceneIndex + 1)} disabled={currentSceneIndex === tour.scenes.length - 1}
-            className="flex h-10 w-10 items-center justify-center rounded-xl text-xl transition-colors disabled:opacity-25"
-            style={{ color: 'var(--text)' }} aria-label="Next scene">›</button>
-        </div>
-      </div>
-
-      <style jsx global>{`
-        .memory-hotspot {
-          width: 34px !important;
-          height: 34px !important;
-          background: rgba(12, 12, 24, 0.78) !important;
-          border-radius: 50% !important;
-          border: 1px solid var(--gold-bright) !important;
-          box-shadow: 0 0 0 6px rgba(201, 168, 76, 0.12), 0 8px 28px rgba(0, 0, 0, 0.45) !important;
-          cursor: pointer !important;
-          transition: transform 160ms ease, box-shadow 160ms ease !important;
-        }
-        .memory-hotspot::before {
-          content: '✦';
-          position: absolute;
-          inset: 0;
-          display: grid;
-          place-items: center;
-          color: var(--gold-bright);
-          font-size: 15px;
-        }
-        .memory-hotspot:hover, .memory-hotspot.selected {
-          transform: scale(1.14);
-          box-shadow: 0 0 0 9px rgba(201, 168, 76, 0.18), 0 10px 34px rgba(0, 0, 0, 0.55) !important;
-        }
-        .walk-hotspot {
-          width: 48px !important;
-          height: 48px !important;
-          border-radius: 50% !important;
-          background: rgba(8, 8, 16, 0.82) !important;
-          border: 1px solid var(--gold-bright) !important;
-          box-shadow: 0 0 0 7px rgba(201, 168, 76, 0.14), 0 12px 32px rgba(0, 0, 0, 0.42) !important;
-          transition: transform 160ms ease, box-shadow 160ms ease !important;
-          backdrop-filter: blur(12px);
-        }
-        .walk-hotspot::before {
-          content: '↑';
-          position: absolute;
-          inset: 0;
-          display: grid;
-          place-items: center;
-          color: var(--gold-bright);
-          font-size: 22px;
-          font-weight: 500;
-        }
-        .walk-hotspot:hover {
-          transform: translateY(-3px) scale(1.08);
-          box-shadow: 0 0 0 10px rgba(201, 168, 76, 0.2), 0 14px 38px rgba(0, 0, 0, 0.5) !important;
-        }
-        .loci-hotspot-tooltip {
-          position: absolute;
-          left: 50%;
-          bottom: calc(100% + 12px);
-          min-width: 150px;
-          transform: translateX(-50%);
-          border-radius: 12px;
-          padding: 10px 12px;
-          background: rgba(8, 8, 16, 0.9);
-          border: 1px solid rgba(255, 255, 255, 0.13);
-          color: var(--text);
-          text-align: left;
-          opacity: 0;
-          pointer-events: none;
-          transition: opacity 140ms ease, transform 140ms ease;
-          backdrop-filter: blur(14px);
-          box-shadow: 0 12px 36px rgba(0,0,0,0.38);
-        }
-        .loci-hotspot-tooltip strong, .loci-hotspot-tooltip small { display: block; }
-        .loci-hotspot-tooltip strong { font: 500 12px var(--font-ui); }
-        .loci-hotspot-tooltip small { margin-top: 4px; color: var(--text-dim); font: 11px var(--font-ui); }
-        .memory-hotspot:hover .loci-hotspot-tooltip,
-        .walk-hotspot:hover .loci-hotspot-tooltip {
-          opacity: 1;
-          transform: translateX(-50%) translateY(-2px);
-        }
-        .walk-hotspot .loci-hotspot-tooltip {
-          top: calc(100% + 12px);
-          bottom: auto;
-          min-width: max-content;
-          padding: 7px 10px;
-          opacity: 1;
-        }
-        .walk-hotspot .loci-hotspot-tooltip small { display: none; }
-        .pnlm-hotspot-base { cursor: pointer !important; }
-        .pnlm-render-container { transition: opacity 0.3s ease; }
-      `}</style>
+  return <div className="loci-viewer">
+    <div ref={element} className="loci-canvas" />
+    <div className="viewer-topline"><span>{placingNote ? 'Tap an object to pin your note · drag to look around' : scene?.name}</span>
+      {!placingNote && <button onClick={() => { setEditing(!editingConnections); setMode(editingConnections ? 'view' : 'edit'); setDraft(null); }}> {editingConnections ? 'Close connections' : 'Edit connections'}</button>}
     </div>
-  );
+    {loading && <div role="status" className="viewer-loading">Loading viewpoint…</div>}
+    {failure && <div role="alert" className="viewer-error">{failure}</div>}
+    <div className="viewer-tools">
+      <button aria-label="Zoom in" onClick={() => engine.current?.setHfov(Math.max(45, (engine.current?.getHfov() ?? 95) - 12), 180)}>+</button>
+      <button aria-label="Zoom out" onClick={() => engine.current?.setHfov(Math.min(115, (engine.current?.getHfov() ?? 95) + 12), 180)}>−</button>
+      <button aria-label="Fullscreen panorama" onClick={() => engine.current?.toggleFullscreen()}>⛶</button>
+    </div>
+    {editingConnections && <ConnectionEditor key={sceneId} scene={scene} links={tour.navHotspots.filter(h => h.fromScene === sceneId)} draft={draft}
+      onDraft={value => { setDraft(value); engine.current?.lookAt(value.position.pitch, value.position.heading, undefined, 250); }}
+      onSave={async value => { await updateConnection(tour.id, value.id, value.position.heading, value.position.pitch, value.surface || 'floor'); setDraft(null); }} />}
+    <div className="scene-navigation">
+      {tray && <div className="scene-tray">{tour.scenes.map(s => <button key={s.id} onClick={() => navigate(s.id)} disabled={loading} aria-current={s.id === sceneId ? 'true' : undefined}>
+        {s.thumbnail && <span className="scene-thumbnail" style={{ backgroundImage: `url("${s.thumbnail}")` }} />}
+        <span>{s.name}{s.alternate ? ' · alternate' : ''}</span>
+      </button>)}</div>}
+      <div className="scene-dock">
+        <button aria-label="Previous scene" disabled={loading || mainIndex === 0} onClick={() => navigate(mainScenes[mainIndex - 1].id)}>‹</button>
+        <button aria-expanded={tray} onClick={() => setTray(value => !value)}><small>{scene?.alternate ? 'Alternate view' : `${mainIndex + 1} / ${mainScenes.length} viewpoints`}</small><strong>{scene?.name}</strong></button>
+        <button aria-label="Next scene" disabled={loading || mainIndex === mainScenes.length - 1} onClick={() => navigate(mainScenes[mainIndex + 1].id)}>›</button>
+      </div>
+    </div>
+  </div>;
 }

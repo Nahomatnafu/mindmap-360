@@ -159,7 +159,7 @@ export default function Home() {
       {/* ── Body ── */}
       <div className="flex flex-1 overflow-hidden">
         {/* Sidebar */}
-        <div className="shrink-0 overflow-hidden transition-all duration-300"
+        <div className="shrink-0 overflow-hidden transition-all duration-300" inert={!sidebarOpen} aria-hidden={!sidebarOpen}
           style={{ width: sidebarOpen ? 260 : 0 }}>
           <TourSidebar
             tours={tours}

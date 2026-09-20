@@ -3,6 +3,8 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { createPalaceFromPanoramas, type PanoramaSource } from '@/lib/authoring/createPalace';
 import { createId } from '@/lib/model/ids';
+import { applyOpenViewLayout } from '@/lib/authoring/openViewLayout';
+import { optimizePalaceImages } from '@/lib/authoring/imageDerivatives';
 import { normalizeYaw } from '@/lib/model/validation';
 import type { MemoryHotspot, PalaceBundle, PalaceWithPayloads } from '@/lib/model/types';
 import { mindPalaceDatabase } from '@/lib/storage/database';
@@ -28,6 +30,9 @@ interface TourContextType {
   selectFlashcard: (id: string | null) => void;
   setMode: (mode: AppMode) => void;
   clearError: () => void;
+  prepareTour: (id: string, reviewedLayout?: boolean) => Promise<void>;
+  preparation: string | null;
+  updateConnection: (tourId: string, id: string, yaw: number, pitch: number, surface: 'floor' | 'wall') => Promise<void>;
 }
 
 const TourContext = createContext<TourContextType | null>(null);
@@ -80,6 +85,8 @@ function toTour(bundle: PalaceWithPayloads, assetUrls: Map<string, string>): Tou
       id: scene.id,
       name: scene.title,
       image: assetUrls.get(scene.panoramaAssetId) ?? '',
+      thumbnail: scene.thumbnailAssetId ? assetUrls.get(scene.thumbnailAssetId) : undefined,
+      alternate: scene.alternate,
       sortOrder: scene.sortOrder,
       initialYaw: scene.initialYaw,
       initialPitch: scene.initialPitch,
@@ -105,6 +112,8 @@ function toTour(bundle: PalaceWithPayloads, assetUrls: Map<string, string>): Tou
     toScene: hotspot.targetSceneId,
     position: { heading: hotspot.yaw, pitch: hotspot.pitch, sceneId: hotspot.sceneId },
     label: hotspot.label,
+    surface: hotspot.surface,
+    preserveView: hotspot.preserveView,
   }] : []);
 
   return {
@@ -136,8 +145,26 @@ export function TourProvider({ children }: { children: React.ReactNode }) {
   const [selectedFlashcardId, setSelectedFlashcardId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [preparation, setPreparation] = useState<string | null>(null);
   const bundlesRef = useRef(new Map<string, PalaceWithPayloads>());
-  const objectUrlsRef = useRef<string[]>([]);
+  const objectUrlsRef = useRef(new Map<string, string>());
+  const disposalRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    const retained = new Set(tours.flatMap(tour => tour.scenes.flatMap(scene => [scene.image, scene.thumbnail])));
+    for (const [id, url] of objectUrlsRef.current) {
+      if (!retained.has(url)) { URL.revokeObjectURL(url); objectUrlsRef.current.delete(id); }
+    }
+  }, [tours]);
+
+  useEffect(() => {
+    if (disposalRef.current) clearTimeout(disposalRef.current);
+    const urls = objectUrlsRef.current;
+    return () => {
+      // Defer disposal so React's development effect replay keeps valid URLs.
+      disposalRef.current = setTimeout(() => { urls.forEach(url => URL.revokeObjectURL(url)); urls.clear(); }, 0);
+    };
+  }, []);
 
   const loadWorkspace = useCallback(async (showLoading = false) => {
     if (showLoading) setIsLoading(true);
@@ -145,19 +172,16 @@ export function TourProvider({ children }: { children: React.ReactNode }) {
     const bundles = (await Promise.all(palaces.map((palace) => repository.loadPalace(palace.id))))
       .filter((bundle): bundle is PalaceWithPayloads => Boolean(bundle));
 
-    const nextUrls: string[] = [];
     const visibleBundles = bundles.filter((bundle) => bundle.scenes.length > 0 && !isBundledDemo(bundle));
     const nextTours = visibleBundles.map((bundle) => {
-      const assetUrls = new Map(bundle.assetPayloads.map((payload) => {
-        const url = URL.createObjectURL(payload.blob);
-        nextUrls.push(url);
+      const assetUrls = new Map(bundle.assetPayloads.filter(payload => bundle.assets.find(a => a.id === payload.assetId)?.purpose !== 'panorama-original').map((payload) => {
+        const url = objectUrlsRef.current.get(payload.assetId) ?? URL.createObjectURL(payload.blob);
+        objectUrlsRef.current.set(payload.assetId, url);
         return [payload.assetId, url];
       }));
       return toTour(bundle, assetUrls);
     });
 
-    objectUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
-    objectUrlsRef.current = nextUrls;
     bundlesRef.current = new Map(visibleBundles.map((bundle) => [bundle.palace.id, bundle]));
     setTours(nextTours);
     setActiveTourId((current) => current && nextTours.some((tour) => tour.id === current) ? current : nextTours[0]?.id ?? null);
@@ -184,14 +208,35 @@ export function TourProvider({ children }: { children: React.ReactNode }) {
     void initialize();
     return () => {
       active = false;
-      objectUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
     };
   }, [loadWorkspace]);
 
   const saveBundle = useCallback(async (bundle: PalaceWithPayloads) => {
-    await repository.savePalace(withoutPayloads(bundle), bundle.assetPayloads, bundle.palace.revision);
-    await loadWorkspace();
+    try {
+      await repository.savePalace(withoutPayloads(bundle), [], bundle.palace.revision);
+      await loadWorkspace();
+    } catch (failure) { setError(errorMessage(failure)); throw failure; }
   }, [loadWorkspace]);
+
+  const prepareTour = useCallback(async (id: string, reviewedLayout = false) => {
+    const bundle = bundlesRef.current.get(id);
+    if (!bundle) throw new Error('Tour is not loaded.');
+    setError(null);
+    setPreparation('Preparing images…');
+    try {
+      const optimized = await optimizePalaceImages(bundle, (done, total) => setPreparation(`Preparing images ${done}/${total}`));
+      const next = reviewedLayout ? applyOpenViewLayout(optimized) : optimized;
+      await repository.savePalace(withoutPayloads(next), next.assetPayloads, bundle.palace.revision);
+      await loadWorkspace();
+    } catch (failure) { setError(errorMessage(failure)); throw failure; }
+    finally { setPreparation(null); }
+  }, [loadWorkspace]);
+
+  const updateConnection = useCallback(async (tourId: string, id: string, yaw: number, pitch: number, surface: 'floor' | 'wall') => {
+    const bundle = bundlesRef.current.get(tourId);
+    if (!bundle) throw new Error('Tour is not loaded.');
+    await saveBundle({ ...bundle, hotspots: bundle.hotspots.map(h => h.id === id ? { ...h, yaw: normalizeYaw(yaw), pitch, surface } : h) });
+  }, [saveBundle]);
 
   const createTourFromFiles = useCallback(async (files: File[], title?: string) => {
     setError(null);
@@ -212,7 +257,7 @@ export function TourProvider({ children }: { children: React.ReactNode }) {
 
   const updateTour = useCallback(async (id: string, updates: Pick<Partial<Tour>, 'name'>) => {
     const bundle = bundlesRef.current.get(id);
-    if (!bundle) return;
+    if (!bundle) throw new Error('This tour is no longer loaded. Reload and try again.');
     await saveBundle({
       ...bundle,
       palace: { ...bundle.palace, title: updates.name?.trim() || bundle.palace.title },
@@ -221,7 +266,7 @@ export function TourProvider({ children }: { children: React.ReactNode }) {
 
   const renameScenes = useCallback(async (tourId: string, namesBySceneId: Record<string, string>) => {
     const bundle = bundlesRef.current.get(tourId);
-    if (!bundle) return;
+    if (!bundle) throw new Error('This tour is no longer loaded. Reload and try again.');
     await saveBundle({
       ...bundle,
       scenes: bundle.scenes.map((scene) => ({
@@ -246,7 +291,7 @@ export function TourProvider({ children }: { children: React.ReactNode }) {
     flashcard: Omit<Flashcard, 'id' | 'createdAt'>,
   ) => {
     const bundle = bundlesRef.current.get(tourId);
-    if (!bundle) return;
+    if (!bundle) throw new Error('This tour is no longer loaded. Reload and try again.');
     const sceneId = flashcard.position.sceneId || bundle.palace.startSceneId || bundle.scenes[0]?.id;
     if (!sceneId) throw new Error('Add a scene before placing a memory.');
     const memoryId = createId();
@@ -280,7 +325,7 @@ export function TourProvider({ children }: { children: React.ReactNode }) {
   const updateFlashcard = useCallback(async (tourId: string, flashcardId: string, updates: Partial<Flashcard>) => {
     const bundle = bundlesRef.current.get(tourId);
     const hotspot = bundle?.hotspots.find((candidate): candidate is MemoryHotspot => candidate.id === flashcardId && candidate.kind === 'memory');
-    if (!bundle || !hotspot) return;
+    if (!bundle || !hotspot) throw new Error('This note is no longer available. Reload and try again.');
     await saveBundle({
       ...bundle,
       memories: bundle.memories.map((memory) => memory.id === hotspot.memoryId ? {
@@ -301,7 +346,7 @@ export function TourProvider({ children }: { children: React.ReactNode }) {
   const deleteFlashcard = useCallback(async (tourId: string, flashcardId: string) => {
     const bundle = bundlesRef.current.get(tourId);
     const hotspot = bundle?.hotspots.find((candidate): candidate is MemoryHotspot => candidate.id === flashcardId && candidate.kind === 'memory');
-    if (!bundle || !hotspot) return;
+    if (!bundle || !hotspot) throw new Error('This note is no longer available. Reload and try again.');
     const remainingHotspots = bundle.hotspots.filter((candidate) => candidate.id !== hotspot.id);
     const memoryStillUsed = remainingHotspots.some((candidate) => candidate.kind === 'memory' && candidate.memoryId === hotspot.memoryId);
     await saveBundle({
@@ -332,8 +377,9 @@ export function TourProvider({ children }: { children: React.ReactNode }) {
     selectFlashcard: setSelectedFlashcardId,
     setMode,
     clearError: () => setError(null),
+    prepareTour, preparation, updateConnection,
   }), [
-    tours, activeTour, mode, selectedFlashcard, isLoading, error, createTourFromFiles,
+    tours, activeTour, mode, selectedFlashcard, isLoading, error, createTourFromFiles, prepareTour, preparation, updateConnection,
     updateTour, renameScenes, deleteTour, addFlashcard, updateFlashcard, deleteFlashcard,
   ]);
 
