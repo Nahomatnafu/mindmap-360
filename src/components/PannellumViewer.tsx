@@ -4,10 +4,12 @@ import { useEffect, useRef, useState } from 'react';
 import type { AppMode, Position, Tour, NavHotspot } from '@/types';
 import { useTourContext } from '@/context/TourContext';
 import { ConnectionEditor } from './ConnectionEditor';
+import { MotionControls } from './MotionControls';
 import './panorama.css';
 
 interface Engine {
   destroy(): void;
+  resize(): void;
   getPitch(): number;
   getYaw(): number;
   getHfov(): number;
@@ -21,20 +23,32 @@ interface Engine {
   addHotSpot(config: Record<string, unknown>, sceneId: string): void;
   removeHotSpot(id: string, sceneId: string): void;
   on(event: string, callback: (...args: unknown[]) => void): void;
+  off(event: string, callback: (...args: unknown[]) => void): void;
+  startOrientation(): void;
+  stopOrientation(): void;
+  isOrientationSupported(): boolean;
+  isOrientationActive(): boolean;
 }
 declare global { interface Window { pannellum?: { viewer(element: HTMLElement, config: Record<string, unknown>): Engine } } }
 
 let enginePromise: Promise<void> | undefined;
 function loadEngine() {
-  if (window.pannellum) return Promise.resolve();
-  if (!enginePromise) enginePromise = new Promise<void>((resolve, reject) => {
-    const css = document.createElement('link');
-    css.rel = 'stylesheet'; css.href = '/vendor/pannellum/pannellum.css'; document.head.append(css);
-    const script = document.createElement('script'); script.src = '/vendor/pannellum/pannellum.js';
-    script.onload = () => resolve();
-    script.onerror = () => { enginePromise = undefined; reject(new Error('Could not load the panorama viewer. Reload to retry.')); };
-    document.head.append(script);
-  });
+  if (!enginePromise) enginePromise = Promise.all([
+    new Promise<void>((resolve, reject) => {
+      const css = document.createElement('link');
+      css.rel = 'stylesheet'; css.href = '/vendor/pannellum/pannellum.css';
+      css.onload = () => resolve();
+      css.onerror = () => { css.remove(); reject(new Error('Could not load the viewer styles. Reload to retry.')); };
+      document.head.append(css);
+    }),
+    new Promise<void>((resolve, reject) => {
+      if (window.pannellum) { resolve(); return; }
+      const script = document.createElement('script'); script.src = '/vendor/pannellum/pannellum.js';
+      script.onload = () => resolve();
+      script.onerror = () => { script.remove(); reject(new Error('Could not load the panorama viewer. Reload to retry.')); };
+      document.head.append(script);
+    }),
+  ]).then(() => undefined).catch(error => { enginePromise = undefined; throw error; });
   return enginePromise;
 }
 
@@ -70,6 +84,7 @@ export function PannellumViewer(props: Props) {
   useEffect(() => {
     let cancelled = false;
     let viewer: Engine | null = null;
+    let resizeObserver: ResizeObserver | undefined;
     const root = element.current;
     if (!root) return;
     let start: { x: number; y: number; id: number } | null = null;
@@ -96,6 +111,8 @@ export function PannellumViewer(props: Props) {
         scenes: Object.fromEntries(scenes.map(s => [s.id, { type: 'equirectangular', panorama: s.image, preview: s.thumbnail, yaw: remembered?.scene === s.id ? remembered.yaw : s.initialYaw, pitch: remembered?.scene === s.id ? remembered.pitch : s.initialPitch, hfov: remembered?.scene === s.id ? remembered.hfov : s.initialHfov, hotSpots: [] }])),
       });
       engine.current = viewer;
+      resizeObserver = new ResizeObserver(() => viewer?.resize());
+      resizeObserver.observe(root);
       rendered.current = [];
       setSceneId(first); setLoading(true); setFailure(''); setReady(value => value + 1);
       viewer.on('scenechange', (...args) => { setSceneId(String(args[0])); setLoading(true); setFailure(''); });
@@ -107,6 +124,7 @@ export function PannellumViewer(props: Props) {
     }).catch(error => { if (!cancelled) { setFailure(String(error)); setLoading(false); } });
     return () => {
       cancelled = true;
+      resizeObserver?.disconnect();
       if (viewer) { camera.current = { scene: viewer.getScene(), yaw: viewer.getYaw(), pitch: viewer.getPitch(), hfov: viewer.getHfov() }; viewer.destroy(); }
       engine.current = null;
       root.removeEventListener('pointerdown', pointerDown); root.removeEventListener('pointerup', pointerUp); root.removeEventListener('pointercancel', pointerCancel);
@@ -174,6 +192,7 @@ export function PannellumViewer(props: Props) {
     </div>
     {loading && <div role="status" className="viewer-loading">Loading viewpoint…</div>}
     {failure && <div role="alert" className="viewer-error">{failure}</div>}
+    <MotionControls viewer={engine} ready={ready} paused={loading || placingNote || mode === 'edit' || Boolean(selectedFlashcardId)} pitch={scene?.initialPitch ?? 0} yaw={scene?.initialYaw ?? 0} />
     <div className="viewer-tools">
       <button aria-label="Zoom in" onClick={() => engine.current?.setHfov(Math.max(45, (engine.current?.getHfov() ?? 95) - 12), 180)}>+</button>
       <button aria-label="Zoom out" onClick={() => engine.current?.setHfov(Math.min(115, (engine.current?.getHfov() ?? 95) + 12), 180)}>−</button>

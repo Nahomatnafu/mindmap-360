@@ -15,6 +15,7 @@ Updated September 20, 2026.
 | Complete | `codex/note-workflow` | Notes agent | Explicit placement, readable notes, awaited saves, modal editing | Photo authoring | Couch sample saved, opened, reloaded, and reopened through sidebar |
 | Complete | `codex/spatial-tour-editor` | Integration owner with spatial review agent | Floor rings, wall circles, reviewed room graph, live placement map, stable viewer lifecycle | Image previews and note workflow | Production build, typecheck, lint, 20 tests; browser navigation and responsive editor verified |
 | Ready for user phone test | `codex/phone-preview` | Codex | Opt-in one-image sample; production server on home Wi-Fi; local HTTP note IDs | Spatial tour editor | Production build, lint, 23 tests; Wi-Fi URL renders sample in browser. Physical phone verification pending |
+| Ready for physical phone test | `codex/phone-motion` | Codex | Permission-aware motion view, sensor readiness, recenter, smaller notes | Phone preview; approved HTTPS tunnel | Build, typecheck, lint, 28 tests; actual HTTP restriction and small marker verified; restricted HTTPS preview running. User explicitly expanded scope to motion controls |
 
 ## Partition point
 
