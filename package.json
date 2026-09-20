@@ -7,11 +7,13 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
     "@photo-sphere-viewer/core": "^5.14.0",
     "@photo-sphere-viewer/markers-plugin": "^5.14.0",
+    "dexie": "^4.4.6",
     "next": "^16.3.5",
     "pannellum": "^2.5.7",
     "react": "^19.3.0",
@@ -20,12 +22,14 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
-    "@types/node": "^20",
+    "@types/node": "^22.20.4",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "^16.3.5",
+    "fake-indexeddb": "^6.2.5",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^5.0.1"
   }
 }
