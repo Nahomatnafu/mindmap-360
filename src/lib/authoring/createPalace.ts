@@ -1,5 +1,6 @@
 import { EXPORT_SCHEMA_VERSION, type AssetPayload, type PalaceBundle } from '@/lib/model/types';
 import { normalizeYaw } from '@/lib/model/validation';
+import { createId } from '@/lib/model/ids';
 
 export interface PanoramaSource {
   blob: Blob;
@@ -14,7 +15,7 @@ interface CreatePalaceOptions {
   idFactory?: () => string;
 }
 
-const defaultIdFactory = () => crypto.randomUUID();
+const defaultIdFactory = createId;
 
 const sceneTitle = (name: string, index: number) => {
   const withoutExtension = name.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ').trim();

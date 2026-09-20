@@ -74,6 +74,7 @@ export async function createEditingPreview(blob: Blob): Promise<ImageDerivative>
 
 // UUIDv8 identifiers make retries deterministic without adding persisted model fields.
 async function derivativeId(sourceId: string, kind: 'viewer' | 'thumbnail'): Promise<string> {
+  if (!crypto.subtle) throw new Error('Image preparation requires HTTPS or localhost. This Wi-Fi preview photo is already compressed; you can keep viewing and adding notes.');
   const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`mind-palace:image-v1:${sourceId}:${kind}`)));
   digest[6] = (digest[6] & 0x0f) | 0x80;
   digest[8] = (digest[8] & 0x3f) | 0x80;

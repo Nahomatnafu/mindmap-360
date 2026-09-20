@@ -1,5 +1,6 @@
 // UI-facing types. Persisted data lives in src/lib/model/types.ts and is
 // adapted into these browser-ready views by TourContext.
+import { createId } from '@/lib/model/ids';
 
 export interface Position {
   heading: number;
@@ -64,7 +65,7 @@ export interface AppState {
 }
 
 export function generateId(): string {
-  return crypto.randomUUID();
+  return createId();
 }
 
 export function parseTourUrl(url: string): { type: Tour['type']; tourId: string } | null {

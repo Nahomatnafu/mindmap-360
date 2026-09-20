@@ -3,6 +3,8 @@
 # dependencies
 /node_modules
 /.worktrees/
+/.preview-runtime/
+/public/phone-preview/
 /.pnp
 .pnp.*
 .yarn/*

@@ -14,6 +14,7 @@ Updated September 20, 2026.
 | Complete | `codex/image-previews` | Image pipeline agent | Preserve originals; generate 3840px viewer images, 512px thumbnails, and temporary 1536px editing previews | Photo authoring | Three derivative tests; applied to the nine-photo browser tour |
 | Complete | `codex/note-workflow` | Notes agent | Explicit placement, readable notes, awaited saves, modal editing | Photo authoring | Couch sample saved, opened, reloaded, and reopened through sidebar |
 | Complete | `codex/spatial-tour-editor` | Integration owner with spatial review agent | Floor rings, wall circles, reviewed room graph, live placement map, stable viewer lifecycle | Image previews and note workflow | Production build, typecheck, lint, 20 tests; browser navigation and responsive editor verified |
+| Ready for user phone test | `codex/phone-preview` | Codex | Opt-in one-image sample; production server on home Wi-Fi; local HTTP note IDs | Spatial tour editor | Production build, lint, 23 tests; Wi-Fi URL renders sample in browser. Physical phone verification pending |
 
 ## Partition point
 

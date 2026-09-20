@@ -5,6 +5,7 @@ import { createPalaceFromPanoramas, type PanoramaSource } from '@/lib/authoring/
 import { createId } from '@/lib/model/ids';
 import { applyOpenViewLayout } from '@/lib/authoring/openViewLayout';
 import { optimizePalaceImages } from '@/lib/authoring/imageDerivatives';
+import { ensurePhonePreview } from '@/lib/authoring/phonePreview';
 import { normalizeYaw } from '@/lib/model/validation';
 import type { MemoryHotspot, PalaceBundle, PalaceWithPayloads } from '@/lib/model/types';
 import { mindPalaceDatabase } from '@/lib/storage/database';
@@ -197,7 +198,14 @@ export function TourProvider({ children }: { children: React.ReactNode }) {
         } catch (migrationError) {
           console.warn('Legacy data could not be migrated:', migrationError);
         }
-        if (active) await loadWorkspace();
+        if (active) {
+          try {
+            if (new URLSearchParams(window.location.search).get('preview') === '1') await ensurePhonePreview(repository);
+          } catch (previewError) {
+            if (active) setError(errorMessage(previewError));
+          }
+          if (active) await loadWorkspace();
+        }
       } catch (initializationError) {
         if (active) {
           setError(errorMessage(initializationError));
