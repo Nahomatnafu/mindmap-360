@@ -43,7 +43,6 @@ export function TourViewer({
       selectedFlashcardId={selectedFlashcardId}
       onSelectFlashcard={onSelectFlashcard}
       onAddFlashcard={onAddFlashcard}
-      onDeleteFlashcard={onDeleteFlashcard}
     />
   );
 }

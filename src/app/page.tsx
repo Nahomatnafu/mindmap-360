@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { useTourContext } from '@/context/TourContext';
 import { TourViewer } from '@/components/TourViewer';
 import { TourSidebar } from '@/components/TourSidebar';
@@ -13,30 +13,20 @@ export default function Home() {
     activeTour,
     mode,
     selectedFlashcard,
+    isLoading,
+    error,
+    clearError,
     setActiveTour,
     setMode,
     selectFlashcard,
     addFlashcard,
     updateFlashcard,
     deleteFlashcard,
-    initializeSampleTours,
   } = useTourContext();
 
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [editorOpen, setEditorOpen] = useState(false);
   const [pendingPosition, setPendingPosition] = useState<Position | null>(null);
-
-  // Initialize sample tours on first load
-  useEffect(() => {
-    initializeSampleTours();
-  }, [initializeSampleTours]);
-
-  // Auto-select first tour if none selected
-  useEffect(() => {
-    if (!activeTour && tours.length > 0) {
-      setActiveTour(tours[0].id);
-    }
-  }, [activeTour, tours, setActiveTour]);
 
   // Handle adding a new flashcard at a position
   const handleAddFlashcard = useCallback((position: Position) => {
@@ -49,9 +39,9 @@ export default function Home() {
     if (!activeTour) return;
 
     if (selectedFlashcard) {
-      updateFlashcard(activeTour.id, selectedFlashcard.id, data);
+      void updateFlashcard(activeTour.id, selectedFlashcard.id, data);
     } else if (pendingPosition) {
-      addFlashcard(activeTour.id, { ...data, position: pendingPosition });
+      void addFlashcard(activeTour.id, { ...data, position: pendingPosition });
     }
 
     setPendingPosition(null);
@@ -69,7 +59,7 @@ export default function Home() {
   // Handle deleting a flashcard
   const handleDeleteFlashcard = useCallback((id: string) => {
     if (!activeTour) return;
-    deleteFlashcard(activeTour.id, id);
+    void deleteFlashcard(activeTour.id, id);
   }, [activeTour, deleteFlashcard]);
 
   // Close editor
@@ -125,7 +115,12 @@ export default function Home() {
 
         {/* Viewer */}
         <main className="flex-1 overflow-hidden">
-          {activeTour ? (
+          {isLoading ? (
+            <div className="h-full flex items-center justify-center text-xs uppercase tracking-widest"
+              style={{ color: 'var(--text-dim)', fontFamily: 'var(--font-ui)' }}>
+              Loading your palace…
+            </div>
+          ) : activeTour ? (
             <TourViewer
               tour={activeTour}
               mode={mode}
@@ -133,23 +128,30 @@ export default function Home() {
               onSelectFlashcard={handleSelectFlashcard}
               onAddFlashcard={handleAddFlashcard}
               onDeleteFlashcard={handleDeleteFlashcard}
-              onUpdateFlashcard={(id, updates) => updateFlashcard(activeTour.id, id, updates)}
+              onUpdateFlashcard={(id, updates) => void updateFlashcard(activeTour.id, id, updates)}
             />
           ) : (
             <div className="h-full flex items-center justify-center flex-col gap-3"
               style={{ color: 'var(--text-dim)' }}>
-              <div style={{ fontFamily: 'var(--font-content)', fontSize: 28, color: 'var(--text)' }}>Loci</div>
-              <div className="text-xs uppercase tracking-widest" style={{ fontFamily: 'var(--font-ui)' }}>
-                Select a space to begin
+              <div style={{ fontFamily: 'var(--font-content)', fontSize: 32, color: 'var(--text)' }}>Build your first palace</div>
+              <div className="max-w-md text-center" style={{ lineHeight: 1.7 }}>
+                Import one or more 2:1 equirectangular photos. Each photo becomes a scene you can walk through and pin memories inside.
               </div>
             </div>
           )}
         </main>
       </div>
 
+      {error && (
+        <div className="fixed left-1/2 top-16 z-50 flex -translate-x-1/2 items-center gap-3 rounded px-4 py-3 shadow-2xl"
+          role="alert" style={{ background: 'var(--panel)', border: '1px solid var(--danger)', color: 'var(--text)' }}>
+          <span>{error}</span>
+          <button onClick={clearError} aria-label="Dismiss error" style={{ color: 'var(--danger)', cursor: 'pointer' }}>✕</button>
+        </div>
+      )}
+
       <FlashcardEditor
         flashcard={selectedFlashcard || undefined}
-        position={pendingPosition || undefined}
         isOpen={editorOpen}
         onClose={handleCloseEditor}
         onSave={handleSaveFlashcard}

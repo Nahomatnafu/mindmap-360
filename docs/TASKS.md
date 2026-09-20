@@ -8,7 +8,7 @@ Updated September 20, 2026.
 | Complete | `codex/local-model-storage` | Codex | Engine-independent model, validation, Dexie repository, repeatable legacy migration | Foundation/viewer decision | Core transaction, validation, conflict, and migration tests pass |
 | Complete | `codex/kuula-integration-baseline` | Codex | Newer Kuula/Matterport/Loci UI plus patched dependencies and the tested data layer | `feature/kuula-api-integration`, local model/storage | Build, typecheck, 10 tests, and audit pass; legacy lint debt recorded |
 | Planned | `codex/backup-import` | Unassigned | Versioned ZIP export/import and validation | Local model/storage | Fresh-browser round trip and invalid-archive test |
-| Planned | `codex/photo-authoring` | Unassigned | Photo import, scene ownership, placement, movement links, memory markers | Local model/storage and viewer adapter | Three-scene authoring flow verified |
+| Complete | `codex/photo-authoring` | Codex | Multi-photo import, scene naming, IndexedDB persistence, scene-scoped memories, movement portals, responsive scene navigator | Local model/storage and viewer adapter | Nine-scene OpenView tour verified; portal, previous/next, and memory placement flows pass |
 | Planned | `codex/practice-routes` | Unassigned | Ordered routes, guided practice, session results, retry missed | Stable model and viewer adapter | Five-stop practice flow verified |
 | Planned | `codex/hosted-demo` | Unassigned | Stable deployment, owned demo assets, phone verification | Foundation; can begin after viewer decision | Desktop/phone preview evidence |
 
