@@ -13,8 +13,8 @@
   --text-dim:    #6b6a8a;
   --danger:      #c94c4c;
 
-  --font-content: var(--font-crimson), "Crimson Pro", Georgia, serif;
-  --font-ui:      var(--font-dm-mono), "DM Mono", "Courier New", monospace;
+  --font-content: Georgia, "Times New Roman", serif;
+  --font-ui:      "SFMono-Regular", Consolas, "Liberation Mono", "Courier New", monospace;
 
   --background: var(--bg);
   --foreground: var(--text);
