@@ -5,7 +5,7 @@ import { useTourContext } from '@/context/TourContext';
 import { TourViewer } from '@/components/TourViewer';
 import { TourSidebar } from '@/components/TourSidebar';
 import { FlashcardEditor } from '@/components/FlashcardEditor';
-import { Position, Flashcard, AppMode } from '@/types';
+import { Position, Flashcard, AppMode, MemoryDraft } from '@/types';
 
 export default function Home() {
   const {
@@ -31,8 +31,11 @@ export default function Home() {
   const [placingNote, setPlacingNote] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [movingId, setMovingId] = useState<string | null>(null);
+  const [moving, setMoving] = useState(false);
 
   const startAddingNote = () => {
+    setMovingId(null);
     selectFlashcard(null);
     setEditingFlashcard(undefined);
     setPendingPosition(null);
@@ -61,16 +64,24 @@ export default function Home() {
 
   // Handle adding a new flashcard at a position
   const handleAddFlashcard = useCallback((position: Position) => {
-    if (!placingNote) return;
+    if (!placingNote || moving) return;
+    if (movingId && activeTour) {
+      setMoving(true);
+      void updateFlashcard(activeTour.id, movingId, { position }).then(() => {
+        setMovingId(null); setPlacingNote(false); setMode('view'); setNotice('Memory moved and saved on this device.');
+      }).catch((failure: unknown) => setActionError(failure instanceof Error ? failure.message : 'The memory could not be moved. Try again.'))
+        .finally(() => setMoving(false));
+      return;
+    }
     selectFlashcard(null);
     setEditingFlashcard(undefined);
     setPendingPosition(position);
     setEditorOpen(true);
     setPlacingNote(false);
-  }, [placingNote, selectFlashcard]);
+  }, [placingNote, selectFlashcard, moving, movingId, activeTour, updateFlashcard, setMode]);
 
   // Handle saving flashcard from editor
-  const handleSaveFlashcard = useCallback(async (data: { question: string; answer: string; color?: string }) => {
+  const handleSaveFlashcard = useCallback(async (data: MemoryDraft) => {
     if (!activeTour) throw new Error('Select a tour before saving this note.');
 
     if (editingFlashcard) {
@@ -79,7 +90,7 @@ export default function Home() {
       await addFlashcard(activeTour.id, { ...data, position: pendingPosition });
     } else throw new Error('Choose a spot in the scene for your note.');
 
-    setNotice('Note saved on this device. Select its marker to read it.');
+    setNotice('Memory saved on this device. Tap its picture or marker to read it.');
     setMode('view');
     setPendingPosition(null);
     selectFlashcard(null);
@@ -149,7 +160,7 @@ export default function Home() {
 
       {placingNote && <div className="flex items-center justify-between gap-3 px-4 py-3 text-sm" role="status"
         style={{ background: 'var(--gold)', color: 'var(--bg)' }}>
-        <span><strong>Place your note.</strong> Drag to look around, then tap the couch, wall, or object you want to remember.</span>
+        <span><strong>{moving ? 'Saving position…' : movingId ? 'Move your memory.' : 'Place your memory.'}</strong> Drag to look around, then tap the couch, wall, or object.</span>
         <button type="button" className="min-h-11 rounded-full border px-4" onClick={() => { setPlacingNote(false); setMode('view'); }}>Cancel</button>
       </div>}
       {notice && <div className="flex items-center justify-between gap-3 px-4 py-2 text-sm" role="status" style={{ background: 'var(--panel)', color: 'var(--text)' }}>
@@ -208,11 +219,19 @@ export default function Home() {
               <h2 className="break-words text-xl font-medium">{selectedFlashcard.question}</h2>
               <button type="button" className="h-10 w-10 shrink-0 rounded-full" aria-label="Close note" onClick={() => selectFlashcard(null)}>✕</button>
             </div>
+            {selectedFlashcard.imageUrl && <div className="mt-3 flex justify-center rounded-xl bg-white/5 p-3">
+              {/* eslint-disable-next-line @next/next/no-img-element -- local Blob URL */}
+              <img src={selectedFlashcard.imageUrl} alt={selectedFlashcard.question} className="max-h-48 max-w-full object-contain" />
+            </div>}
             <p className="mt-3 whitespace-pre-wrap break-words text-base leading-7">{selectedFlashcard.answer}</p>
             <div className="mt-5 flex items-center justify-between gap-3">
               <span className="text-xs" style={{ color: 'var(--text-dim)' }}>Saved on this device</span>
               <button type="button" className="min-h-11 rounded-full border px-4 text-sm" style={{ borderColor: 'var(--border)' }}
                 onClick={() => { setEditingFlashcard(selectedFlashcard); setPendingPosition(null); setEditorOpen(true); }}>Edit note</button>
+            </div>
+            <div className="mt-3 flex gap-3">
+              <button className="min-h-11 rounded-full border px-4 text-sm" onClick={() => { setMovingId(selectedFlashcard.id); selectFlashcard(null); setPlacingNote(true); setMode('edit'); }}>Reposition</button>
+              <button className="min-h-11 px-4 text-sm" style={{ color: 'var(--danger)' }} onClick={() => { if (window.confirm('Delete this memory and its image?')) handleDeleteFlashcard(selectedFlashcard.id); }}>Delete</button>
             </div>
           </section>}
         </main>

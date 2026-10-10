@@ -136,13 +136,20 @@ export function PannellumViewer(props: Props) {
     if (!viewer || !ready) return;
     for (const old of rendered.current) viewer.removeHotSpot(old.id, old.scene);
     rendered.current = [];
-    function marker(id: string, scene: string, yaw: number, pitch: number, label: string, kind: string, color: string, action: () => void) {
+    function marker(id: string, scene: string, yaw: number, pitch: number, label: string, kind: string, color: string, action: () => void, imageUrl?: string, size = 64) {
       viewer!.addHotSpot({ id, yaw, pitch, cssClass: 'loci-anchor', createTooltipFunc: (anchor: HTMLElement) => {
         const button = document.createElement('button'); button.type = 'button'; button.className = `loci-marker ${kind}`;
         button.setAttribute('aria-label', label); button.title = label; button.style.setProperty('--marker-color', color);
         const ring = document.createElement('span'); ring.className = 'loci-ring'; ring.setAttribute('aria-hidden', 'true');
         const caption = document.createElement('span'); caption.className = 'loci-caption'; caption.textContent = label;
-        button.append(ring, caption);
+        if (imageUrl) {
+          button.classList.add('image-memory');
+          button.style.setProperty('--image-size', `${Math.max(32, Math.min(192, size))}px`);
+          const image = document.createElement('img');
+          image.src = imageUrl; image.alt = ''; image.draggable = false;
+          image.addEventListener('error', () => { image.remove(); button.classList.remove('image-memory'); button.prepend(ring); });
+          button.append(image, caption);
+        } else button.append(ring, caption);
         for (const event of ['pointerdown', 'mousedown', 'touchstart', 'dblclick']) button.addEventListener(event, e => e.stopPropagation());
         button.addEventListener('click', event => { event.stopPropagation(); action(); });
         anchor.append(button);
@@ -161,7 +168,7 @@ export function PannellumViewer(props: Props) {
       });
     }
     for (const note of tour.flashcards) if (note.position.sceneId) {
-      marker(note.id, note.position.sceneId, note.position.heading, note.position.pitch, note.question, `note ${selectedFlashcardId === note.id ? 'selected' : ''}`, note.color || '#c9a84c', () => callbacks.current.onSelectFlashcard(note.id));
+      marker(note.id, note.position.sceneId, note.position.heading, note.position.pitch, note.question, `note ${selectedFlashcardId === note.id ? 'selected' : ''}`, note.color || '#c9a84c', () => callbacks.current.onSelectFlashcard(note.id), note.imageUrl, note.size);
     }
   }, [ready, tour, draft, editingConnections, selectedFlashcardId]);
 

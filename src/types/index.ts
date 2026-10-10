@@ -16,6 +16,17 @@ export interface Flashcard {
   createdAt: number;
   color?: string;
   icon?: string;
+  imageUrl?: string;
+  size?: number;
+}
+
+export interface MemoryDraft {
+  question: string;
+  answer: string;
+  color?: string;
+  size?: number;
+  /** undefined keeps the existing image; null removes it. */
+  imageBlob?: Blob | null;
 }
 
 export interface TourScene {

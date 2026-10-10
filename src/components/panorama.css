@@ -23,6 +23,10 @@
 .floor .loci-ring{transform:rotateX(62deg);width:64px;height:64px;border-width:4px;background:#ffffff14}
 .wall .loci-ring{width:36px;height:36px;border-width:2px;box-shadow:0 0 0 7px #ffffff1c}
 .loci-marker.note{width:44px;height:44px;left:-22px;top:-22px}
+.loci-marker.image-memory{width:max(44px,var(--image-size));height:max(44px,var(--image-size));left:calc(max(44px,var(--image-size)) / -2);top:calc(max(44px,var(--image-size)) / -2);border-radius:12px}
+.image-memory img{width:var(--image-size);height:var(--image-size);object-fit:contain;filter:drop-shadow(0 3px 5px #0006);pointer-events:none}
+.image-memory:focus-visible{outline:2px solid #dfc577;outline-offset:4px}
+.image-memory.selected img,.image-memory:hover img{filter:drop-shadow(0 0 5px #dfc57799)}
 .note .loci-ring{width:14px;height:14px;border:2px solid #fff;background:var(--marker-color);box-shadow:0 0 0 3px #10141966}
 .loci-marker:hover .loci-ring,.loci-marker:focus-visible .loci-ring{background:#ffffff55;box-shadow:0 0 0 6px #ffffff26,0 5px 18px #0005}
 .note.selected .loci-ring,.note:hover .loci-ring,.note:focus-visible .loci-ring{background:var(--marker-color);box-shadow:0 0 0 4px #ffffff50}

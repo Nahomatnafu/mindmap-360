@@ -1,13 +1,14 @@
 'use client';
 
 import React, { useEffect, useId, useRef, useState } from 'react';
-import { Flashcard } from '@/types';
+import { Flashcard, MemoryDraft } from '@/types';
+import { validateMemoryImage } from '@/lib/authoring/memoryImages';
 
 interface FlashcardEditorProps {
   flashcard?: Flashcard;
   isOpen: boolean;
   onClose: () => void;
-  onSave: (data: { question: string; answer: string; color?: string }) => Promise<void>;
+  onSave: (data: MemoryDraft) => Promise<void>;
 }
 
 const COLORS = [
@@ -28,11 +29,21 @@ function FlashcardEditorForm({ flashcard, onClose, onSave }: Omit<FlashcardEdito
   const [question, setQuestion] = useState(flashcard?.question ?? '');
   const [answer, setAnswer] = useState(flashcard?.answer ?? '');
   const [color, setColor] = useState(flashcard?.color || COLORS[0].value);
+  const [size, setSize] = useState(flashcard?.imageUrl ? flashcard.size ?? 64 : 64);
+  const [imageBlob, setImageBlob] = useState<Blob | null | undefined>();
+  const [preview, setPreview] = useState(flashcard?.imageUrl ?? '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const submittingRef = useRef(false);
   const dialogRef = useRef<HTMLDialogElement>(null);
   const id = useId();
+
+  useEffect(() => {
+    if (imageBlob === undefined) return;
+    const url = imageBlob ? URL.createObjectURL(imageBlob) : '';
+    setPreview(url);
+    return () => { if (url) URL.revokeObjectURL(url); };
+  }, [imageBlob]);
 
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -48,7 +59,7 @@ function FlashcardEditorForm({ flashcard, onClose, onSave }: Omit<FlashcardEdito
     setSaving(true);
     setError(null);
     try {
-      await onSave({ question: question.trim(), answer: answer.trim(), color });
+      await onSave({ question: question.trim(), answer: answer.trim(), color, size, imageBlob });
       onClose();
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : 'Your note could not be saved. Please try again.');
@@ -69,9 +80,9 @@ function FlashcardEditorForm({ flashcard, onClose, onSave }: Omit<FlashcardEdito
       onCancel={event => { event.preventDefault(); if (!submittingRef.current) onClose(); }}>
       <div className="flex items-start justify-between gap-4 px-6 pt-6">
         <div>
-          <h2 id={`${id}-heading`} className="text-xl font-medium">{flashcard ? 'Edit note' : 'Add a note here'}</h2>
+          <h2 id={`${id}-heading`} className="text-xl font-medium">{flashcard ? 'Edit memory' : 'Add a memory here'}</h2>
           <p id={`${id}-hint`} className="mt-2 text-sm leading-relaxed" style={{ color: 'var(--text-dim)' }}>
-            Pin a thought, poem, or memory to this spot. Your line breaks are preserved.
+            Place a picture at this spot. Tap it in the room to reveal what you want to remember.
           </p>
         </div>
         <button type="button" onClick={onClose} disabled={saving} aria-label="Close note editor"
@@ -79,14 +90,34 @@ function FlashcardEditorForm({ flashcard, onClose, onSave }: Omit<FlashcardEdito
       </div>
       <form onSubmit={handleSubmit} className="flex flex-col gap-5 p-6" aria-busy={saving}>
         <div>
-          <label htmlFor={`${id}-title`} className="mb-2 block text-sm">Title</label>
+          <label htmlFor={`${id}-title`} className="mb-2 block text-sm">Concept or title</label>
           <input id={`${id}-title`} value={question} onChange={event => setQuestion(event.target.value)}
-            style={inputStyle} required disabled={saving} placeholder="A memory on the couch" autoFocus />
+            style={inputStyle} maxLength={160} required disabled={saving} placeholder="Krypton, a poem, a memory…" autoFocus />
+        </div>
+        <div className="rounded-xl border p-4" style={{ borderColor: 'var(--border)' }}>
+          <label htmlFor={`${id}-image`} className="mb-2 block text-sm">Association image</label>
+          <input id={`${id}-image`} type="file" accept="image/png,image/jpeg,image/webp" disabled={saving}
+            className="w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-white/10 file:px-3 file:py-3 file:text-white"
+            onChange={event => {
+              const file = event.target.files?.[0];
+              if (file) try { validateMemoryImage(file); setImageBlob(file); setError(null); } catch (failure) { setError(failure instanceof Error ? failure.message : 'Image could not be opened.'); }
+              event.target.value = '';
+            }} />
+          <p className="mt-2 text-xs" style={{ color: 'var(--text-dim)' }}>PNG or WebP cutouts blend into the room. JPEG works too. Up to 10 MB.</p>
+          {preview && <>
+            <div className="my-4 flex h-48 items-center justify-center rounded-xl" style={{ background: 'repeating-conic-gradient(#252c34 0% 25%, #343d47 0% 50%) 0 0 / 24px 24px' }}>
+              {/* eslint-disable-next-line @next/next/no-img-element -- browser-owned Blob URL, no server optimizer */}
+              <img src={preview} alt="Memory image preview" style={{ width: size, height: size, objectFit: 'contain' }} />
+            </div>
+            <label htmlFor={`${id}-size`} className="block text-sm">Size in the room · {size}px</label>
+            <input id={`${id}-size`} type="range" min={32} max={192} step={4} value={size} disabled={saving} onChange={event => setSize(Number(event.target.value))} className="mt-2 w-full" />
+            <button type="button" disabled={saving} className="mt-2 min-h-11 text-sm underline" onClick={() => setImageBlob(null)}>Remove image</button>
+          </>}
         </div>
         <div>
           <label htmlFor={`${id}-body`} className="mb-2 block text-sm">Note</label>
           <textarea id={`${id}-body`} value={answer} onChange={event => setAnswer(event.target.value)}
-            style={inputStyle} rows={6} required disabled={saving} placeholder="Write something you want to remember…" />
+            style={inputStyle} rows={4} maxLength={12000} required disabled={saving} placeholder="What does this image help you remember?" />
         </div>
         <fieldset disabled={saving}>
           <legend className="mb-3 text-sm">Marker color</legend>
@@ -102,15 +133,15 @@ function FlashcardEditorForm({ flashcard, onClose, onSave }: Omit<FlashcardEdito
           </div>
         </fieldset>
         {error && <p role="alert" className="rounded-xl border p-3 text-sm" style={{ color: 'var(--danger)', borderColor: 'var(--danger)' }}>
-          Save failed: {error} Your text is still here. Try saving again.
+          {error} Your draft is still here.
         </p>}
-        <p className="text-xs" style={{ color: 'var(--text-dim)' }}>Saved on this device after you press Save note.</p>
+        <p className="text-xs" style={{ color: 'var(--text-dim)' }}>Saved on this device after you press Save memory.</p>
         <div className="flex gap-3">
           <button type="button" onClick={onClose} disabled={saving} className="min-h-11 flex-1 rounded-xl border text-sm disabled:opacity-40"
             style={{ borderColor: 'var(--border)' }}>Cancel</button>
           <button type="submit" disabled={saving || !question.trim() || !answer.trim()}
             className="min-h-11 flex-1 rounded-xl text-sm font-medium disabled:opacity-40"
-            style={{ background: 'var(--gold)', color: 'var(--bg)' }}>{saving ? 'Saving…' : 'Save note'}</button>
+            style={{ background: 'var(--gold)', color: 'var(--bg)' }}>{saving ? 'Saving…' : 'Save memory'}</button>
         </div>
       </form>
     </dialog>

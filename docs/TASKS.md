@@ -1,6 +1,18 @@
 # Mind Palace 360 task board
 
-Updated September 20, 2026.
+Updated October 10, 2026.
+
+## Hackathon delivery
+
+Integration owner: Codex. Baseline: `codex/phone-motion`; integration branch: `codex/hackathon-demo`.
+The user authorized image-first memories, AI suggestions and image generation using OpenRouter with `openai/gpt-image-2.5-flare`. This expands the original plan. Keys remain server-only in ignored `.env.local`.
+
+| Status | Branch | Owner | Scope | Dependencies / evidence |
+|---|---|---|---|---|
+| Automated checks pass | `codex/image-memories` | Codex | Image upload, anchored image markers, note reveal, resize/reposition, transactional saving | Build, typecheck, lint, 31 tests pass; browser integration verification pending |
+| In progress | `codex/association-suggestions` | Codex | Three editable association suggestions through OpenRouter | Server environment, structured output validation |
+| Planned | `codex/association-image-generation` | Codex | Flare generation and persistence through the manual image pipeline | Committed image contract; key required only for live checks |
+| Planned | `codex/demo-delivery` | Codex | Build verification, phone preview, setup and recovery instructions | Existing preview gateway blocks API POST; adapt or replace |
 
 | Status | Branch | Owner | Scope | Depends on | Completion evidence |
 |---|---|---|---|---|---|
@@ -19,7 +31,7 @@ Updated September 20, 2026.
 
 ## Partition point
 
-New feature branches should start from `codex/spatial-tour-editor`. The model and storage contracts are now committed, so bounded work can be partitioned safely:
+New hackathon feature branches should start from `codex/hackathon-demo` after their dependencies are integrated. The model and storage contracts are committed, so bounded work can be partitioned safely:
 
 - A second builder can own `codex/practice-routes` against the committed interfaces.
 - Another model can build fixture/image tooling or `codex/hosted-demo` without touching private images.

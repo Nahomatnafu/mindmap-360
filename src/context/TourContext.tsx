@@ -2,16 +2,16 @@
 
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { createPalaceFromPanoramas, type PanoramaSource } from '@/lib/authoring/createPalace';
-import { createId } from '@/lib/model/ids';
 import { applyOpenViewLayout } from '@/lib/authoring/openViewLayout';
 import { optimizePalaceImages } from '@/lib/authoring/imageDerivatives';
 import { ensurePhonePreview } from '@/lib/authoring/phonePreview';
+import { prepareMemoryImage, pruneMemoryImages, writeMemory } from '@/lib/authoring/memoryImages';
 import { normalizeYaw } from '@/lib/model/validation';
-import type { MemoryHotspot, PalaceBundle, PalaceWithPayloads } from '@/lib/model/types';
+import type { AssetPayload, MemoryHotspot, PalaceBundle, PalaceWithPayloads } from '@/lib/model/types';
 import { mindPalaceDatabase } from '@/lib/storage/database';
 import { migrateLegacyLocalStorage } from '@/lib/storage/legacyMigration';
 import { PalaceRepository } from '@/lib/storage/repository';
-import type { AppMode, Flashcard, Tour } from '@/types';
+import type { AppMode, Flashcard, MemoryDraft, Position, Tour } from '@/types';
 
 interface TourContextType {
   tours: Tour[];
@@ -25,8 +25,8 @@ interface TourContextType {
   renameScenes: (tourId: string, namesBySceneId: Record<string, string>) => Promise<void>;
   deleteTour: (id: string) => Promise<void>;
   setActiveTour: (id: string | null) => void;
-  addFlashcard: (tourId: string, flashcard: Omit<Flashcard, 'id' | 'createdAt'>) => Promise<void>;
-  updateFlashcard: (tourId: string, flashcardId: string, updates: Partial<Flashcard>) => Promise<void>;
+  addFlashcard: (tourId: string, flashcard: MemoryDraft & { position: Position }) => Promise<void>;
+  updateFlashcard: (tourId: string, flashcardId: string, updates: Partial<Flashcard> & Partial<MemoryDraft>) => Promise<void>;
   deleteFlashcard: (tourId: string, flashcardId: string) => Promise<void>;
   selectFlashcard: (id: string | null) => void;
   setMode: (mode: AppMode) => void;
@@ -105,6 +105,8 @@ function toTour(bundle: PalaceWithPayloads, assetUrls: Map<string, string>): Tou
       createdAt: Date.parse(bundle.palace.updatedAt),
       color: hotspot.color,
       icon: hotspot.iconKey,
+      imageUrl: assetUrls.get(memory.imageAssetId ?? hotspot.customAssetId ?? ''),
+      size: hotspot.size,
     }];
   });
   const navHotspots = bundle.hotspots.flatMap((hotspot) => hotspot.kind === 'move' ? [{
@@ -152,7 +154,7 @@ export function TourProvider({ children }: { children: React.ReactNode }) {
   const disposalRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    const retained = new Set(tours.flatMap(tour => tour.scenes.flatMap(scene => [scene.image, scene.thumbnail])));
+    const retained = new Set(tours.flatMap(tour => [...tour.scenes.flatMap(scene => [scene.image, scene.thumbnail]), ...tour.flashcards.map(card => card.imageUrl)]));
     for (const [id, url] of objectUrlsRef.current) {
       if (!retained.has(url)) { URL.revokeObjectURL(url); objectUrlsRef.current.delete(id); }
     }
@@ -219,9 +221,9 @@ export function TourProvider({ children }: { children: React.ReactNode }) {
     };
   }, [loadWorkspace]);
 
-  const saveBundle = useCallback(async (bundle: PalaceWithPayloads) => {
+  const saveBundle = useCallback(async (bundle: PalaceWithPayloads, payloads: AssetPayload[] = []) => {
     try {
-      await repository.savePalace(withoutPayloads(bundle), [], bundle.palace.revision);
+      await repository.savePalace(withoutPayloads(bundle), payloads, bundle.palace.revision);
       await loadWorkspace();
     } catch (failure) { setError(errorMessage(failure)); throw failure; }
   }, [loadWorkspace]);
@@ -296,59 +298,32 @@ export function TourProvider({ children }: { children: React.ReactNode }) {
 
   const addFlashcard = useCallback(async (
     tourId: string,
-    flashcard: Omit<Flashcard, 'id' | 'createdAt'>,
+    flashcard: MemoryDraft & { position: Position },
   ) => {
     const bundle = bundlesRef.current.get(tourId);
     if (!bundle) throw new Error('This tour is no longer loaded. Reload and try again.');
     const sceneId = flashcard.position.sceneId || bundle.palace.startSceneId || bundle.scenes[0]?.id;
     if (!sceneId) throw new Error('Add a scene before placing a memory.');
-    const memoryId = createId();
-    const hotspotId = createId();
-    await saveBundle({
-      ...bundle,
-      memories: [...bundle.memories, {
-        id: memoryId,
-        palaceId: tourId,
-        title: flashcard.question,
-        body: flashcard.answer,
-        prompt: flashcard.question,
-        answer: flashcard.answer,
-      }],
-      hotspots: [...bundle.hotspots, {
-        id: hotspotId,
-        kind: 'memory',
-        sceneId,
-        memoryId,
-        yaw: normalizeYaw(flashcard.position.heading),
-        pitch: flashcard.position.pitch,
-        label: flashcard.question,
-        iconKey: flashcard.icon || 'note',
-        color: flashcard.color || '#c9a84c',
-        size: 30,
-      }],
-    });
-    setSelectedFlashcardId(hotspotId);
+    const image = flashcard.imageBlob ? await prepareMemoryImage(flashcard.imageBlob) : undefined;
+    const edit = writeMemory(bundle, { ...flashcard, position: { ...flashcard.position, sceneId } }, image);
+    await saveBundle(edit.bundle, edit.payloads);
+    setSelectedFlashcardId(edit.hotspotId);
   }, [saveBundle]);
 
-  const updateFlashcard = useCallback(async (tourId: string, flashcardId: string, updates: Partial<Flashcard>) => {
+  const updateFlashcard = useCallback(async (tourId: string, flashcardId: string, updates: Partial<Flashcard> & Partial<MemoryDraft>) => {
     const bundle = bundlesRef.current.get(tourId);
     const hotspot = bundle?.hotspots.find((candidate): candidate is MemoryHotspot => candidate.id === flashcardId && candidate.kind === 'memory');
     if (!bundle || !hotspot) throw new Error('This note is no longer available. Reload and try again.');
-    await saveBundle({
-      ...bundle,
-      memories: bundle.memories.map((memory) => memory.id === hotspot.memoryId ? {
-        ...memory,
-        title: updates.question ?? memory.title,
-        body: updates.answer ?? memory.body,
-        prompt: updates.question ?? memory.prompt,
-        answer: updates.answer ?? memory.answer,
-      } : memory),
-      hotspots: bundle.hotspots.map((candidate) => candidate.id === hotspot.id ? {
-        ...candidate,
-        label: updates.question ?? candidate.label,
-        color: updates.color ?? candidate.color,
-      } : candidate),
-    });
+    const memory = bundle.memories.find(m => m.id === hotspot.memoryId);
+    if (!memory) throw new Error('This memory is no longer available.');
+    const image = updates.imageBlob ? await prepareMemoryImage(updates.imageBlob) : updates.imageBlob;
+    const edit = writeMemory(bundle, {
+      ...updates, id: flashcardId,
+      question: updates.question ?? memory.title,
+      answer: updates.answer ?? memory.body,
+      position: updates.position ?? { heading: hotspot.yaw, pitch: hotspot.pitch, sceneId: hotspot.sceneId },
+    }, image);
+    await saveBundle(edit.bundle, edit.payloads);
   }, [saveBundle]);
 
   const deleteFlashcard = useCallback(async (tourId: string, flashcardId: string) => {
@@ -357,11 +332,12 @@ export function TourProvider({ children }: { children: React.ReactNode }) {
     if (!bundle || !hotspot) throw new Error('This note is no longer available. Reload and try again.');
     const remainingHotspots = bundle.hotspots.filter((candidate) => candidate.id !== hotspot.id);
     const memoryStillUsed = remainingHotspots.some((candidate) => candidate.kind === 'memory' && candidate.memoryId === hotspot.memoryId);
-    await saveBundle({
+    await saveBundle(pruneMemoryImages({
       ...bundle,
       hotspots: remainingHotspots,
       memories: memoryStillUsed ? bundle.memories : bundle.memories.filter((memory) => memory.id !== hotspot.memoryId),
-    });
+      routes: bundle.routes.map(route => ({ ...route, stops: route.stops.filter(id => id !== hotspot.id) })),
+    }));
     setSelectedFlashcardId(null);
   }, [saveBundle]);
 
