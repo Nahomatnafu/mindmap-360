@@ -15,6 +15,7 @@ interface Engine {
   getYaw(): number;
   getHfov(): number;
   getScene(): string;
+  isLoaded(): boolean;
   setHfov(value: number, duration?: number): void;
   lookAt(pitch: number, yaw: number, hfov?: number, duration?: number): void;
   stopMovement(): void;
@@ -119,9 +120,9 @@ export function PannellumViewer(props: Props) {
       resizeObserver = new ResizeObserver(() => viewer?.resize());
       resizeObserver.observe(root);
       rendered.current = [];
-      setSceneId(first); setLoading(true); setFailure(''); setReady(value => value + 1);
+      setSceneId(first); setLoading(true); setFailure('');
       viewer.on('scenechange', (...args) => { setSceneId(String(args[0])); setLoading(true); setFailure(''); });
-      viewer.on('load', () => setLoading(false));
+      viewer.on('load', () => { setLoading(false); setReady(value => value + 1); });
       viewer.on('error', (...args) => { setLoading(false); setFailure(String(args[0] ?? 'Panorama could not load.')); });
       root.addEventListener('pointerdown', pointerDown);
       root.addEventListener('pointerup', pointerUp);
@@ -138,7 +139,10 @@ export function PannellumViewer(props: Props) {
 
   useEffect(() => {
     const viewer = engine.current;
-    if (!viewer || !ready) return;
+    // Pannellum addHotSpot creates a DOM node even before load; its initial load
+    // then creates another. Reconcile only after load, including updates queued
+    // while a new viewpoint was loading.
+    if (!viewer || !ready || !viewer.isLoaded()) return;
     for (const old of rendered.current) viewer.removeHotSpot(old.id, old.scene);
     rendered.current = [];
     function marker(id: string, scene: string, yaw: number, pitch: number, label: string, kind: string, color: string, action: () => void, imageUrl?: string, size = DEFAULT_IMAGE_SIZE) {
