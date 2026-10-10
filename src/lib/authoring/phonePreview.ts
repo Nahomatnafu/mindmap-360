@@ -23,11 +23,11 @@ async function seed(repository: PalaceRepository) {
   bundle.scenes[0].initialPitch = -15;
   bundle.scenes[0].initialHfov = 95;
   const memoryId = '71360000-0000-4000-8000-000000000004';
-  bundle.memories.push({ id: memoryId, palaceId: previewId, title: 'Try a note on the couch',
-    body: 'Drag to look around. Tap Add note, then tap an object to pin your own memory. Your notes stay in this phone’s browser. This temporary preview has one viewpoint.' });
+  bundle.memories.push({ id: memoryId, palaceId: previewId, title: 'Try a memory on the couch',
+    body: 'Drag to look around or enable Motion view. Tap Add memory, then tap an object. Upload a picture or generate an association image and add what you want to remember. Pictures and notes stay in this browser. Export a ZIP to transfer them to another device. This preview has one viewpoint.' });
   bundle.hotspots.push({ id: '71360000-0000-4000-8000-000000000005', kind: 'memory',
     sceneId: bundle.scenes[0].id, memoryId, yaw: 4, pitch: -22,
-    label: 'Try a note on the couch', iconKey: 'note', color: '#4f8cff', size: 30 });
+    label: 'Try a memory on the couch', iconKey: 'note', color: '#4f8cff', size: 30 });
   // Another tab may have seeded while this tab downloaded the image.
   try { await repository.savePalace(bundle, assetPayloads, 0); }
   catch (error) { if (!(error instanceof PalaceRevisionConflictError)) throw error; }

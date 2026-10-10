@@ -15,14 +15,14 @@ The user authorized image-first memories, AI suggestions and image generation us
 | Complete | `codex/dependency-refresh` | Codex | Compatible framework and image/ZIP dependency updates | Build, typecheck, lint, 37 tests; production dependency audit reports zero vulnerabilities |
 | Complete | `codex/spatial-image-scale` | Codex | Images follow panorama magnification; smaller 40px default and 16px minimum | Build, typecheck, lint, 38 tests; browser image measured 58.6px, 72.3px after zoom in, 47.1px after zoom out; demo image resized to 40px |
 | Complete | `codex/demo-backup` | Codex | Portable ZIP export/import with images, validation and new-palace restore | Build, typecheck, lint, 42 tests; exported demo ZIP and restored to an empty browser origin; picture, note and 40px size verified |
-| Planned | `codex/demo-delivery` | Codex | Build verification, phone preview, setup and recovery instructions | Existing preview gateway blocks API POST; adapt or replace |
+| Complete; physical phone test pending | `codex/demo-delivery` | Codex | Stable HTTPS hosting, restricted preview gateway, setup and recovery instructions | https://mindmap-360.vercel.app — Vercel Ready. Build, typecheck, lint, 42 tests; 390×844 layout and note reveal verified. Hosted AI: missing code 401, three suggestions 200, Flare PNG 200 (768px, alpha). Private photo/env URLs 404. ZIP restored in hosted browser. Cloudflare quick tunnel failed certificate validation; replaced with approved Vercel deployment |
 
 | Status | Branch | Owner | Scope | Depends on | Completion evidence |
 |---|---|---|---|---|---|
 | Superseded | `codex/foundation-baseline` | Codex | First secure baseline built from `master`; retained as a recovery point | None | Replaced by the newer Kuula branch integration |
 | Complete | `codex/local-model-storage` | Codex | Engine-independent model, validation, Dexie repository, repeatable legacy migration | Foundation/viewer decision | Core transaction, validation, conflict, and migration tests pass |
 | Complete | `codex/kuula-integration-baseline` | Codex | Newer Kuula/Matterport/Loci UI plus patched dependencies and the tested data layer | `feature/kuula-api-integration`, local model/storage | Build, typecheck, 10 tests, and audit pass; legacy lint debt recorded |
-| Planned | `codex/backup-import` | Unassigned | Versioned ZIP export/import and validation | Local model/storage | Fresh-browser round trip and invalid-archive test |
+| Complete via `codex/demo-backup` | `codex/backup-import` | Codex | Versioned ZIP export/import and validation | Local model/storage | Fresh-origin round trip, invalid archive, checksum, dimensions and reference tests pass |
 | Complete | `codex/photo-authoring` | Codex | Multi-photo import, scene naming, IndexedDB persistence, scene-scoped memories, movement portals, responsive scene navigator | Local model/storage and viewer adapter | Nine-scene OpenView tour verified; portal, previous/next, and memory placement flows pass |
 | Planned | `codex/practice-routes` | Unassigned | Ordered routes, guided practice, session results, retry missed | Stable model and viewer adapter | Five-stop practice flow verified |
 | Planned | `codex/hosted-demo` | Unassigned | Stable deployment, owned demo assets, phone verification | Foundation; can begin after viewer decision | Desktop/phone preview evidence |

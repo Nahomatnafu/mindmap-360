@@ -1,0 +1,10 @@
+.env*
+.preview-runtime/
+.worktrees/
+public/phone-preview/
+*.mindpalace.zip
+node_modules/
+.next/
+.npm-cache/
+*.tsbuildinfo
+public/tours/
