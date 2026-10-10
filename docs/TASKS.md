@@ -11,7 +11,8 @@ The user authorized image-first memories, AI suggestions and image generation us
 |---|---|---|---|---|
 | Automated checks pass | `codex/image-memories` | Codex | Image upload, anchored image markers, note reveal, resize/reposition, transactional saving | Build, typecheck, lint, 31 tests pass; browser integration verification pending |
 | Checks pass | `codex/association-suggestions` | Codex | Three association suggestions through OpenRouter | Build, typecheck, lint, 35 tests; live Krypton API and Gold browser requests succeed |
-| In progress | `codex/association-image-generation` | Codex | Flare generation and persistence through the manual image pipeline | Committed image contract; configured key detected without printing it |
+| Checks pass | `codex/association-image-generation` | Codex | Flare generation and persistence through the manual image pipeline | Build, typecheck, lint, 37 tests; live transparent gold bracelet generated, saved, refreshed and reopened in browser |
+| In progress | `codex/demo-backup` | Codex | Portable ZIP export/import with images, validation and new-palace restore | Needed to move local demo between devices; no cloud photo upload |
 | Planned | `codex/demo-delivery` | Codex | Build verification, phone preview, setup and recovery instructions | Existing preview gateway blocks API POST; adapt or replace |
 
 | Status | Branch | Owner | Scope | Depends on | Completion evidence |

@@ -34,6 +34,7 @@ function FlashcardEditorForm({ flashcard, onClose, onSave }: Omit<FlashcardEdito
   const [imageBlob, setImageBlob] = useState<Blob | null | undefined>();
   const [preview, setPreview] = useState(flashcard?.imageUrl ?? '');
   const [saving, setSaving] = useState(false);
+  const [aiBusy, setAiBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const submittingRef = useRef(false);
   const dialogRef = useRef<HTMLDialogElement>(null);
@@ -55,7 +56,7 @@ function FlashcardEditorForm({ flashcard, onClose, onSave }: Omit<FlashcardEdito
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (submittingRef.current || !question.trim() || !answer.trim()) return;
+    if (submittingRef.current || aiBusy || !question.trim() || !answer.trim()) return;
     submittingRef.current = true;
     setSaving(true);
     setError(null);
@@ -78,7 +79,7 @@ function FlashcardEditorForm({ flashcard, onClose, onSave }: Omit<FlashcardEdito
     <dialog ref={dialogRef} aria-labelledby={`${id}-heading`} aria-describedby={`${id}-hint`}
       className="fixed inset-0 m-auto max-h-[90dvh] w-[calc(100%-2rem)] max-w-lg overflow-y-auto rounded-2xl p-0 shadow-2xl backdrop:bg-black/70"
       style={{ background: 'var(--panel)', border: '1px solid var(--border)', color: 'var(--text)' }}
-      onCancel={event => { event.preventDefault(); if (!submittingRef.current) onClose(); }}>
+      onCancel={event => { event.preventDefault(); if (!submittingRef.current && !aiBusy) onClose(); }}>
       <div className="flex items-start justify-between gap-4 px-6 pt-6">
         <div>
           <h2 id={`${id}-heading`} className="text-xl font-medium">{flashcard ? 'Edit memory' : 'Add a memory here'}</h2>
@@ -86,21 +87,21 @@ function FlashcardEditorForm({ flashcard, onClose, onSave }: Omit<FlashcardEdito
             Place a picture at this spot. Tap it in the room to reveal what you want to remember.
           </p>
         </div>
-        <button type="button" onClick={onClose} disabled={saving} aria-label="Close note editor"
+        <button type="button" onClick={onClose} disabled={saving || aiBusy} aria-label="Close note editor"
           className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full disabled:opacity-40">✕</button>
       </div>
       <form onSubmit={handleSubmit} className="flex flex-col gap-5 p-6" aria-busy={saving}>
         <div>
           <label htmlFor={`${id}-title`} className="mb-2 block text-sm">Concept or title</label>
           <input id={`${id}-title`} value={question} onChange={event => setQuestion(event.target.value)}
-            style={inputStyle} maxLength={160} required disabled={saving} placeholder="Krypton, a poem, a memory…" autoFocus />
+            style={inputStyle} maxLength={160} required disabled={saving || aiBusy} placeholder="Krypton, a poem, a memory…" autoFocus />
         </div>
-        <AssociationAssistant term={question} disabled={saving} onChoose={association => {
+        <AssociationAssistant term={question} disabled={saving} onImage={setImageBlob} onBusyChange={setAiBusy} onChoose={association => {
           setAnswer(current => current ? `${current}\n\nAssociation: ${association.label} — ${association.reason}` : `Association: ${association.label} — ${association.reason}`);
         }} />
         <div className="rounded-xl border p-4" style={{ borderColor: 'var(--border)' }}>
           <label htmlFor={`${id}-image`} className="mb-2 block text-sm">Association image</label>
-          <input id={`${id}-image`} type="file" accept="image/png,image/jpeg,image/webp" disabled={saving}
+          <input id={`${id}-image`} type="file" accept="image/png,image/jpeg,image/webp" disabled={saving || aiBusy}
             className="w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-white/10 file:px-3 file:py-3 file:text-white"
             onChange={event => {
               const file = event.target.files?.[0];
@@ -141,9 +142,9 @@ function FlashcardEditorForm({ flashcard, onClose, onSave }: Omit<FlashcardEdito
         </p>}
         <p className="text-xs" style={{ color: 'var(--text-dim)' }}>Saved on this device after you press Save memory.</p>
         <div className="flex gap-3">
-          <button type="button" onClick={onClose} disabled={saving} className="min-h-11 flex-1 rounded-xl border text-sm disabled:opacity-40"
+          <button type="button" onClick={onClose} disabled={saving || aiBusy} className="min-h-11 flex-1 rounded-xl border text-sm disabled:opacity-40"
             style={{ borderColor: 'var(--border)' }}>Cancel</button>
-          <button type="submit" disabled={saving || !question.trim() || !answer.trim()}
+          <button type="submit" disabled={saving || aiBusy || !question.trim() || !answer.trim()}
             className="min-h-11 flex-1 rounded-xl text-sm font-medium disabled:opacity-40"
             style={{ background: 'var(--gold)', color: 'var(--bg)' }}>{saving ? 'Saving…' : 'Save memory'}</button>
         </div>

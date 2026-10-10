@@ -148,11 +148,11 @@ export default function Home() {
         {/* Card count pill */}
         {activeTour && (
           <div className="flex shrink-0 items-center gap-3">
-          <span className="hidden text-xs sm:inline" style={{ color: 'var(--text-dim)' }}>{activeTour.flashcards.length} notes</span>
+          <span className="hidden text-xs sm:inline" style={{ color: 'var(--text-dim)' }}>{activeTour.flashcards.length} memories</span>
           <button type="button" onClick={startAddingNote} disabled={isLoading || editorOpen || !activeTour.scenes.length}
             className="min-h-11 rounded-full px-5 text-sm font-medium disabled:opacity-40"
             style={{ background: 'rgba(201,168,76,0.12)', color: 'var(--gold)', border: '1px solid rgba(201,168,76,0.25)', fontFamily: 'var(--font-ui)', letterSpacing: '0.06em' }}>
-            + Add note
+            + Add memory
           </button>
           </div>
         )}
