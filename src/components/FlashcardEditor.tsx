@@ -33,6 +33,7 @@ function FlashcardEditorForm({ flashcard, onClose, onSave }: Omit<FlashcardEdito
   const [size, setSize] = useState(flashcard?.imageUrl ? flashcard.size ?? 64 : 64);
   const [imageBlob, setImageBlob] = useState<Blob | null | undefined>();
   const [preview, setPreview] = useState(flashcard?.imageUrl ?? '');
+  const previewUrlRef = useRef('');
   const [saving, setSaving] = useState(false);
   const [aiBusy, setAiBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -40,12 +41,13 @@ function FlashcardEditorForm({ flashcard, onClose, onSave }: Omit<FlashcardEdito
   const dialogRef = useRef<HTMLDialogElement>(null);
   const id = useId();
 
-  useEffect(() => {
-    if (imageBlob === undefined) return;
-    const url = imageBlob ? URL.createObjectURL(imageBlob) : '';
-    setPreview(url);
-    return () => { if (url) URL.revokeObjectURL(url); };
-  }, [imageBlob]);
+  useEffect(() => () => { if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current); }, []);
+  function chooseImage(blob: Blob | null) {
+    if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+    const url = blob ? URL.createObjectURL(blob) : '';
+    previewUrlRef.current = url;
+    setImageBlob(blob); setPreview(url);
+  }
 
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -96,7 +98,7 @@ function FlashcardEditorForm({ flashcard, onClose, onSave }: Omit<FlashcardEdito
           <input id={`${id}-title`} value={question} onChange={event => setQuestion(event.target.value)}
             style={inputStyle} maxLength={160} required disabled={saving || aiBusy} placeholder="Krypton, a poem, a memory…" autoFocus />
         </div>
-        <AssociationAssistant term={question} disabled={saving} onImage={setImageBlob} onBusyChange={setAiBusy} onChoose={association => {
+        <AssociationAssistant term={question} disabled={saving} onImage={chooseImage} onBusyChange={setAiBusy} onChoose={association => {
           setAnswer(current => current ? `${current}\n\nAssociation: ${association.label} — ${association.reason}` : `Association: ${association.label} — ${association.reason}`);
         }} />
         <div className="rounded-xl border p-4" style={{ borderColor: 'var(--border)' }}>
@@ -105,7 +107,7 @@ function FlashcardEditorForm({ flashcard, onClose, onSave }: Omit<FlashcardEdito
             className="w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-white/10 file:px-3 file:py-3 file:text-white"
             onChange={event => {
               const file = event.target.files?.[0];
-              if (file) try { validateMemoryImage(file); setImageBlob(file); setError(null); } catch (failure) { setError(failure instanceof Error ? failure.message : 'Image could not be opened.'); }
+              if (file) try { validateMemoryImage(file); chooseImage(file); setError(null); } catch (failure) { setError(failure instanceof Error ? failure.message : 'Image could not be opened.'); }
               event.target.value = '';
             }} />
           <p className="mt-2 text-xs" style={{ color: 'var(--text-dim)' }}>PNG or WebP cutouts blend into the room. JPEG works too. Up to 10 MB.</p>
@@ -116,7 +118,7 @@ function FlashcardEditorForm({ flashcard, onClose, onSave }: Omit<FlashcardEdito
             </div>
             <label htmlFor={`${id}-size`} className="block text-sm">Size in the room · {size}px</label>
             <input id={`${id}-size`} type="range" min={32} max={192} step={4} value={size} disabled={saving} onChange={event => setSize(Number(event.target.value))} className="mt-2 w-full" />
-            <button type="button" disabled={saving} className="mt-2 min-h-11 text-sm underline" onClick={() => setImageBlob(null)}>Remove image</button>
+            <button type="button" disabled={saving} className="mt-2 min-h-11 text-sm underline" onClick={() => chooseImage(null)}>Remove image</button>
           </>}
         </div>
         <div>

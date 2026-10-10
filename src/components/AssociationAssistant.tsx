@@ -23,16 +23,19 @@ export function AssociationAssistant({ term, disabled, onChoose, onImage, onBusy
   const [description, setDescription] = useState('');
   const [chosen, setChosen] = useState<Association | null>(null);
   const [generating, setGenerating] = useState(false);
-  const [generated, setGenerated] = useState<Blob | null>(null);
+  const [generated, setGeneratedState] = useState<Blob | null>(null);
   const [generatedUrl, setGeneratedUrl] = useState('');
+  const generatedUrlRef = useRef('');
   const controller = useRef<AbortController | null>(null);
 
   useEffect(() => { onBusyChange(busy || generating); }, [busy, generating, onBusyChange]);
-  useEffect(() => {
-    const url = generated ? URL.createObjectURL(generated) : '';
-    setGeneratedUrl(url);
-    return () => { if (url) URL.revokeObjectURL(url); };
-  }, [generated]);
+  useEffect(() => () => { if (generatedUrlRef.current) URL.revokeObjectURL(generatedUrlRef.current); }, []);
+  function setGenerated(blob: Blob | null) {
+    if (generatedUrlRef.current) URL.revokeObjectURL(generatedUrlRef.current);
+    const url = blob ? URL.createObjectURL(blob) : '';
+    generatedUrlRef.current = url;
+    setGeneratedState(blob); setGeneratedUrl(url);
+  }
 
   async function generate() {
     if (controller.current || !description.trim()) return;

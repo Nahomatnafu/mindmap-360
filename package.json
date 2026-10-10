@@ -14,11 +14,12 @@
     "@photo-sphere-viewer/core": "^5.14.0",
     "@photo-sphere-viewer/markers-plugin": "^5.14.0",
     "dexie": "^4.4.6",
-    "next": "^16.3.5",
+    "fflate": "^0.8.3",
+    "next": "^16.4.0",
     "pannellum": "^2.5.7",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
-    "sharp": "^0.35.4"
+    "sharp": "^0.35.5"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
@@ -26,7 +27,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
-    "eslint-config-next": "^16.3.5",
+    "eslint-config-next": "^16.4.0",
     "fake-indexeddb": "^6.2.5",
     "tailwindcss": "^4",
     "typescript": "^5",
