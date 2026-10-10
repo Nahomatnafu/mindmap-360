@@ -10,8 +10,8 @@ The user authorized image-first memories, AI suggestions and image generation us
 | Status | Branch | Owner | Scope | Dependencies / evidence |
 |---|---|---|---|---|
 | Automated checks pass | `codex/image-memories` | Codex | Image upload, anchored image markers, note reveal, resize/reposition, transactional saving | Build, typecheck, lint, 31 tests pass; browser integration verification pending |
-| In progress | `codex/association-suggestions` | Codex | Three editable association suggestions through OpenRouter | Server environment, structured output validation |
-| Planned | `codex/association-image-generation` | Codex | Flare generation and persistence through the manual image pipeline | Committed image contract; key required only for live checks |
+| Checks pass | `codex/association-suggestions` | Codex | Three association suggestions through OpenRouter | Build, typecheck, lint, 35 tests; live Krypton API and Gold browser requests succeed |
+| In progress | `codex/association-image-generation` | Codex | Flare generation and persistence through the manual image pipeline | Committed image contract; configured key detected without printing it |
 | Planned | `codex/demo-delivery` | Codex | Build verification, phone preview, setup and recovery instructions | Existing preview gateway blocks API POST; adapt or replace |
 
 | Status | Branch | Owner | Scope | Depends on | Completion evidence |

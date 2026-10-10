@@ -3,6 +3,7 @@
 import React, { useEffect, useId, useRef, useState } from 'react';
 import { Flashcard, MemoryDraft } from '@/types';
 import { validateMemoryImage } from '@/lib/authoring/memoryImages';
+import { AssociationAssistant } from './AssociationAssistant';
 
 interface FlashcardEditorProps {
   flashcard?: Flashcard;
@@ -94,6 +95,9 @@ function FlashcardEditorForm({ flashcard, onClose, onSave }: Omit<FlashcardEdito
           <input id={`${id}-title`} value={question} onChange={event => setQuestion(event.target.value)}
             style={inputStyle} maxLength={160} required disabled={saving} placeholder="Krypton, a poem, a memory…" autoFocus />
         </div>
+        <AssociationAssistant term={question} disabled={saving} onChoose={association => {
+          setAnswer(current => current ? `${current}\n\nAssociation: ${association.label} — ${association.reason}` : `Association: ${association.label} — ${association.reason}`);
+        }} />
         <div className="rounded-xl border p-4" style={{ borderColor: 'var(--border)' }}>
           <label htmlFor={`${id}-image`} className="mb-2 block text-sm">Association image</label>
           <input id={`${id}-image`} type="file" accept="image/png,image/jpeg,image/webp" disabled={saving}
