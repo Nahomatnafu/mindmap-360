@@ -3,6 +3,7 @@ import type { AssetPayload, PalaceWithPayloads } from '../model/types';
 import { normalizeYaw } from '../model/validation';
 import type { MemoryDraft, Position } from '@/types';
 import { DEFAULT_IMAGE_SIZE } from '../viewer/imageScale';
+import { assertRasterImage } from './rasterImage';
 
 export interface PreparedMemoryImage { blob: Blob; width: number; height: number }
 
@@ -14,6 +15,7 @@ export function validateMemoryImage(blob: Blob) {
 /** Creates a separate display copy; never edits the supplied file. PNG preserves alpha. */
 export async function prepareMemoryImage(blob: Blob): Promise<PreparedMemoryImage> {
   validateMemoryImage(blob);
+  await assertRasterImage(blob);
   const url = URL.createObjectURL(blob);
   const image = new Image();
   try {

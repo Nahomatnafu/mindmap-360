@@ -3,6 +3,7 @@
 import React, { useRef, useState } from 'react';
 import { Tour, AppMode } from '@/types';
 import { useTourContext } from '@/context/TourContext';
+import { BackupControls } from './BackupControls';
 
 interface TourSidebarProps {
   tours: Tour[];
@@ -155,6 +156,7 @@ export function TourSidebar({
         </div>
       )}
 
+      <BackupControls />
       {pendingFiles.length > 0 && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(5,5,12,0.82)' }}>
           <div className="w-full max-w-md rounded-xl p-6 shadow-2xl" style={{ background: 'var(--panel)', border: '1px solid var(--border)' }}>

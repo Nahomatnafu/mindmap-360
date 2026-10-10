@@ -11,6 +11,8 @@ import type { AssetPayload, MemoryHotspot, PalaceBundle, PalaceWithPayloads } fr
 import { mindPalaceDatabase } from '@/lib/storage/database';
 import { migrateLegacyLocalStorage } from '@/lib/storage/legacyMigration';
 import { PalaceRepository } from '@/lib/storage/repository';
+import { exportPalace, importPalace } from '@/lib/storage/backup';
+import { assertRasterImage } from '@/lib/authoring/rasterImage';
 import type { AppMode, Flashcard, MemoryDraft, Position, Tour } from '@/types';
 
 interface TourContextType {
@@ -21,6 +23,8 @@ interface TourContextType {
   isLoading: boolean;
   error: string | null;
   createTourFromFiles: (files: File[], title?: string) => Promise<string>;
+  exportTour: (id: string) => Promise<Blob>;
+  restoreTour: (file: File) => Promise<void>;
   updateTour: (id: string, updates: Pick<Partial<Tour>, 'name'>) => Promise<void>;
   renameScenes: (tourId: string, namesBySceneId: Record<string, string>) => Promise<void>;
   deleteTour: (id: string) => Promise<void>;
@@ -61,6 +65,7 @@ const readImageDimensions = (blob: Blob) => new Promise<{ width: number; height:
 });
 
 async function toPanoramaSource(blob: Blob, name: string): Promise<PanoramaSource> {
+  await assertRasterImage(blob);
   const dimensions = await readImageDimensions(blob);
   return { blob, name, mimeType: supportedMime(blob), ...dimensions };
 }
@@ -265,6 +270,23 @@ export function TourProvider({ children }: { children: React.ReactNode }) {
     }
   }, [loadWorkspace]);
 
+  const exportTour = useCallback(async (id: string) => {
+    const bundle = await repository.loadPalace(id);
+    if (!bundle) throw new Error('This palace is no longer available.');
+    return exportPalace(bundle);
+  }, []);
+
+  const restoreTour = useCallback(async (file: File) => {
+    setError(null);
+    try {
+      const bundle = await importPalace(file);
+      await repository.savePalace(withoutPayloads(bundle), bundle.assetPayloads, 0);
+      await loadWorkspace();
+      setActiveTourId(bundle.palace.id);
+      setSelectedFlashcardId(null);
+    } catch (failure) { setError(errorMessage(failure)); throw failure; }
+  }, [loadWorkspace]);
+
   const updateTour = useCallback(async (id: string, updates: Pick<Partial<Tour>, 'name'>) => {
     const bundle = bundlesRef.current.get(id);
     if (!bundle) throw new Error('This tour is no longer loaded. Reload and try again.');
@@ -361,10 +383,10 @@ export function TourProvider({ children }: { children: React.ReactNode }) {
     selectFlashcard: setSelectedFlashcardId,
     setMode,
     clearError: () => setError(null),
-    prepareTour, preparation, updateConnection,
+    prepareTour, preparation, updateConnection, exportTour, restoreTour,
   }), [
     tours, activeTour, mode, selectedFlashcard, isLoading, error, createTourFromFiles, prepareTour, preparation, updateConnection,
-    updateTour, renameScenes, deleteTour, addFlashcard, updateFlashcard, deleteFlashcard,
+    updateTour, renameScenes, deleteTour, addFlashcard, updateFlashcard, deleteFlashcard, exportTour, restoreTour,
   ]);
 
   return <TourContext.Provider value={value}>{children}</TourContext.Provider>;

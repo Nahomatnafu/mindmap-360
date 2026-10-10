@@ -14,7 +14,7 @@ The user authorized image-first memories, AI suggestions and image generation us
 | Checks pass | `codex/association-image-generation` | Codex | Flare generation and persistence through the manual image pipeline | Build, typecheck, lint, 37 tests; live transparent gold bracelet generated, saved, refreshed and reopened in browser |
 | Complete | `codex/dependency-refresh` | Codex | Compatible framework and image/ZIP dependency updates | Build, typecheck, lint, 37 tests; production dependency audit reports zero vulnerabilities |
 | Complete | `codex/spatial-image-scale` | Codex | Images follow panorama magnification; smaller 40px default and 16px minimum | Build, typecheck, lint, 38 tests; browser image measured 58.6px, 72.3px after zoom in, 47.1px after zoom out; demo image resized to 40px |
-| In progress | `codex/demo-backup` | Codex | Portable ZIP export/import with images, validation and new-palace restore | Needed to move local demo between devices; no cloud photo upload |
+| Complete | `codex/demo-backup` | Codex | Portable ZIP export/import with images, validation and new-palace restore | Build, typecheck, lint, 42 tests; exported demo ZIP and restored to an empty browser origin; picture, note and 40px size verified |
 | Planned | `codex/demo-delivery` | Codex | Build verification, phone preview, setup and recovery instructions | Existing preview gateway blocks API POST; adapt or replace |
 
 | Status | Branch | Owner | Scope | Depends on | Completion evidence |
