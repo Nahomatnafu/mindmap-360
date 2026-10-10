@@ -2,6 +2,7 @@ import { createId } from '../model/ids';
 import type { AssetPayload, PalaceWithPayloads } from '../model/types';
 import { normalizeYaw } from '../model/validation';
 import type { MemoryDraft, Position } from '@/types';
+import { DEFAULT_IMAGE_SIZE } from '../viewer/imageScale';
 
 export interface PreparedMemoryImage { blob: Blob; width: number; height: number }
 
@@ -56,7 +57,7 @@ export function writeMemory(bundle: PalaceWithPayloads, draft: MemoryDraft & { p
   const hotspotId = oldHotspot?.id ?? createId();
   const assetId = image ? createId() : image === null ? undefined : oldMemory?.imageAssetId;
   const memory = { ...oldMemory, id: memoryId, palaceId: bundle.palace.id, title: draft.question.trim(), body: draft.answer.trim(), prompt: draft.question.trim(), answer: draft.answer.trim(), imageAssetId: assetId };
-  const hotspot = { ...oldHotspot, id: hotspotId, kind: 'memory' as const, memoryId, sceneId: sceneId!, yaw: normalizeYaw(draft.position.heading), pitch: draft.position.pitch, label: memory.title, color: draft.color ?? oldHotspot?.color ?? '#c9a84c', iconKey: 'note', size: draft.size ?? oldHotspot?.size ?? 64, customAssetId: undefined };
+  const hotspot = { ...oldHotspot, id: hotspotId, kind: 'memory' as const, memoryId, sceneId: sceneId!, yaw: normalizeYaw(draft.position.heading), pitch: draft.position.pitch, label: memory.title, color: draft.color ?? oldHotspot?.color ?? '#c9a84c', iconKey: 'note', size: draft.size ?? oldHotspot?.size ?? DEFAULT_IMAGE_SIZE, customAssetId: undefined };
   const payloads: AssetPayload[] = image && assetId ? [{ assetId, blob: image.blob }] : [];
   const next = pruneMemoryImages({
     ...bundle,

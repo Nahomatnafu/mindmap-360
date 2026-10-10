@@ -5,6 +5,7 @@ import type { AppMode, Position, Tour, NavHotspot } from '@/types';
 import { useTourContext } from '@/context/TourContext';
 import { ConnectionEditor } from './ConnectionEditor';
 import { MotionControls } from './MotionControls';
+import { DEFAULT_IMAGE_SIZE, imageZoomScale } from '@/lib/viewer/imageScale';
 import './panorama.css';
 
 interface Engine {
@@ -111,6 +112,10 @@ export function PannellumViewer(props: Props) {
         scenes: Object.fromEntries(scenes.map(s => [s.id, { type: 'equirectangular', panorama: s.image, preview: s.thumbnail, yaw: remembered?.scene === s.id ? remembered.yaw : s.initialYaw, pitch: remembered?.scene === s.id ? remembered.pitch : s.initialPitch, hfov: remembered?.scene === s.id ? remembered.hfov : s.initialHfov, hotSpots: [] }])),
       });
       engine.current = viewer;
+      const updateImageScale = () => root.style.setProperty('--memory-zoom', String(imageZoomScale(viewer!.getHfov())));
+      updateImageScale();
+      viewer.on('zoomchange', updateImageScale);
+      viewer.on('load', updateImageScale);
       resizeObserver = new ResizeObserver(() => viewer?.resize());
       resizeObserver.observe(root);
       rendered.current = [];
@@ -136,7 +141,7 @@ export function PannellumViewer(props: Props) {
     if (!viewer || !ready) return;
     for (const old of rendered.current) viewer.removeHotSpot(old.id, old.scene);
     rendered.current = [];
-    function marker(id: string, scene: string, yaw: number, pitch: number, label: string, kind: string, color: string, action: () => void, imageUrl?: string, size = 64) {
+    function marker(id: string, scene: string, yaw: number, pitch: number, label: string, kind: string, color: string, action: () => void, imageUrl?: string, size = DEFAULT_IMAGE_SIZE) {
       viewer!.addHotSpot({ id, yaw, pitch, cssClass: 'loci-anchor', createTooltipFunc: (anchor: HTMLElement) => {
         const button = document.createElement('button'); button.type = 'button'; button.className = `loci-marker ${kind}`;
         button.setAttribute('aria-label', label); button.title = label; button.style.setProperty('--marker-color', color);
@@ -144,7 +149,7 @@ export function PannellumViewer(props: Props) {
         const caption = document.createElement('span'); caption.className = 'loci-caption'; caption.textContent = label;
         if (imageUrl) {
           button.classList.add('image-memory');
-          button.style.setProperty('--image-size', `${Math.max(32, Math.min(192, size))}px`);
+          button.style.setProperty('--image-size', `${Math.max(16, Math.min(192, size))}px`);
           const image = document.createElement('img');
           image.src = imageUrl; image.alt = ''; image.draggable = false;
           image.addEventListener('error', () => { image.remove(); button.classList.remove('image-memory'); button.prepend(ring); });

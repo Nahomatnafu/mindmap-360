@@ -4,6 +4,7 @@ import React, { useEffect, useId, useRef, useState } from 'react';
 import { Flashcard, MemoryDraft } from '@/types';
 import { validateMemoryImage } from '@/lib/authoring/memoryImages';
 import { AssociationAssistant } from './AssociationAssistant';
+import { DEFAULT_IMAGE_SIZE } from '@/lib/viewer/imageScale';
 
 interface FlashcardEditorProps {
   flashcard?: Flashcard;
@@ -30,7 +31,7 @@ function FlashcardEditorForm({ flashcard, onClose, onSave }: Omit<FlashcardEdito
   const [question, setQuestion] = useState(flashcard?.question ?? '');
   const [answer, setAnswer] = useState(flashcard?.answer ?? '');
   const [color, setColor] = useState(flashcard?.color || COLORS[0].value);
-  const [size, setSize] = useState(flashcard?.imageUrl ? flashcard.size ?? 64 : 64);
+  const [size, setSize] = useState(flashcard?.imageUrl ? flashcard.size ?? DEFAULT_IMAGE_SIZE : DEFAULT_IMAGE_SIZE);
   const [imageBlob, setImageBlob] = useState<Blob | null | undefined>();
   const [preview, setPreview] = useState(flashcard?.imageUrl ?? '');
   const previewUrlRef = useRef('');
@@ -116,8 +117,9 @@ function FlashcardEditorForm({ flashcard, onClose, onSave }: Omit<FlashcardEdito
               {/* eslint-disable-next-line @next/next/no-img-element -- browser-owned Blob URL, no server optimizer */}
               <img src={preview} alt="Memory image preview" style={{ width: size, height: size, objectFit: 'contain' }} />
             </div>
-            <label htmlFor={`${id}-size`} className="block text-sm">Size in the room · {size}px</label>
-            <input id={`${id}-size`} type="range" min={32} max={192} step={4} value={size} disabled={saving} onChange={event => setSize(Number(event.target.value))} className="mt-2 w-full" />
+            <label htmlFor={`${id}-size`} className="block text-sm">Size at normal zoom · {size}px</label>
+            <input id={`${id}-size`} type="range" min={16} max={192} step={4} value={size} disabled={saving} onChange={event => setSize(Number(event.target.value))} className="mt-2 w-full" />
+            <p className="text-xs" style={{ color: 'var(--text-dim)' }}>Scales with the room as you zoom. Try 24–40px for a densely filled palace.</p>
             <button type="button" disabled={saving} className="mt-2 min-h-11 text-sm underline" onClick={() => chooseImage(null)}>Remove image</button>
           </>}
         </div>
